@@ -1,0 +1,106 @@
+schema: spec-driven
+
+context: |
+  Project:
+    CostGuard.
+
+  Domain:
+    Sistema de gestão e responsabilização de custos de computação em nuvem.
+    O sistema importa recursos e custos cloud, utiliza tags para associar
+    recursos a projetos e equipes, consolida os custos por projeto,
+    compara o consumo com orçamentos mensais e gera alertas.
+
+  Initial scope:
+    O provedor cloud suportado inicialmente é AWS.
+    Orçamentos são mensais e expressos em USD.
+
+  Tech stack:
+    Frontend: Reflex com Python.
+    Backend: Xano.
+    Persistência: banco de dados disponibilizado pelo Xano.
+    Desenvolvimento assistido por IA: Kiro.
+    Especificação incremental: OpenSpec.
+    Ambiente Python: venv com pip.
+
+  Architecture:
+    O frontend deve ser implementado exclusivamente com Reflex.
+    O backend Xano é responsável por regras de negócio, persistência,
+    autorização e validações que não podem depender do cliente.
+    O frontend não deve ser considerado mecanismo de segurança.
+    Não introduzir tecnologias alternativas sem decisão arquitetural
+    explicitamente aprovada.
+
+  Security:
+    Não armazenar senhas, tokens, chaves de API ou outros segredos
+    no código-fonte, frontend ou documentação versionada.
+    Credenciais de provedores cloud devem possuir somente as
+    permissões necessárias.
+    Regras de autorização devem ser aplicadas no backend.
+    Falhas de importação não devem ocorrer silenciosamente.
+
+  Development:
+    Desenvolver o sistema incrementalmente utilizando OpenSpec.
+    Mudanças funcionais ou técnicas relevantes devem ser especificadas
+    antes da implementação.
+    Não inventar requisitos ou regras de negócio.
+    Quando houver ambiguidade ou conflito na documentação,
+    solicitar esclarecimento antes de implementar.
+    Não modificar funcionalidades fora do escopo da change atual
+    sem justificativa e aprovação.
+
+  Source of truth:
+    docs/project-overview.md contém a visão global do projeto.
+    docs/domain-model.md contém os conceitos e relacionamentos do domínio.
+    AGENTS.md contém as regras operacionais para agentes.
+    openspec/specs/ contém o comportamento consolidado através das changes.
+
+  Language:
+    Escrever documentação do projeto e artefatos OpenSpec
+    em português brasileiro.
+    Termos técnicos, nomes de tecnologias, comandos e identificadores
+    podem permanecer no idioma original quando apropriado.
+
+rules:
+  proposal:
+    - Descrever claramente o problema, o objetivo e o escopo da mudança.
+    - Identificar explicitamente o que estiver fora do escopo quando necessário.
+    - Não ampliar o escopo do projeto sem justificativa e aprovação.
+
+  specs:
+    - Escrever requisitos claros e verificáveis.
+    - Utilizar cenários para comportamentos relevantes.
+    - Incluir casos de erro e condições de exceção relevantes.
+    - Não criar comportamento que contradiga o modelo de domínio.
+
+  design:
+    - Respeitar a arquitetura e as tecnologias definidas para o projeto.
+    - Registrar decisões técnicas relevantes e seus motivos.
+    - Não introduzir novas dependências ou tecnologias sem necessidade justificada.
+
+  tasks:
+    - Dividir a implementação em tarefas pequenas e verificáveis.
+    - Manter as tarefas limitadas ao escopo da change.
+    - Permitir identificar objetivamente quando cada tarefa está concluída.
+
+operations:
+  apply:
+    guidance:
+      - Implementar somente o que estiver previsto na change aprovada.
+      - Consultar a documentação oficial das tecnologias quando houver dúvida.
+      - Utilizar o Xano Developer MCP para documentação e validação de XanoScript quando necessário.
+      - Utilizar as Agent Skills do Reflex quando disponíveis para alterações no frontend.
+      - Executar as verificações relevantes antes de considerar uma tarefa concluída.
+      - Interromper a implementação caso seja necessária uma decisão de domínio ou arquitetura não prevista.
+
+  archive:
+    guidance:
+      - Confirmar que a implementação corresponde às especificações aprovadas.
+      - Confirmar que as tarefas previstas foram concluídas e verificadas.
+      - Não arquivar uma change com divergências conhecidas entre especificação e implementação.
+  review:
+    guidance:
+      - Verificar se a implementação atende aos requisitos especificados.
+      - Garantir que a arquitetura e as tecnologias definidas sejam respeitadas.
+      - Confirmar que não há comportamentos não especificados ou potencialmente prejudiciais.
+      - Verificar se a implementação segue as práticas de segurança definidas.
+      - Aprovar somente mudanças que estejam alinhadas com a visão geral do projeto e as decisões arquitetônicas.

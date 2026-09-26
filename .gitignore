@@ -1,0 +1,11 @@
+*.db
+assets/external/
+.states
+.web/
+__pycache__/
+*.py[cod]
+.venv/
+.claude/settings.local.json
+.env
+.env.*
+.kiro/settings/mcp.json
