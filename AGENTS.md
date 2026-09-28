@@ -1,7 +1,7 @@
 <!-- reflex managed begin (do not edit inside this block; add custom content outside the markers) -->
 # Agents
 
-This project uses the **Reflex agent skills** — up-to-date knowledge for building full-stack Python web apps with [Reflex](https://reflex.dev). Install them first, then use them as described below.
+This project uses the Reflex agent skills — up-to-date knowledge for building full-stack Python web apps with Reflex. Install them first, then use them as described below.
 
 ## Installing the Skills
 
@@ -20,7 +20,7 @@ Newly installed plugins load on the next session. After installing, tell the use
 
 ### Other agents (Cursor, OpenCode, Codex, Pi)
 
-```
+```bash
 npx skills add reflex-dev/agent-skills
 ```
 
@@ -34,11 +34,11 @@ Before writing or editing any Reflex code, confirm these three skills are availa
 
 ### Reflex documentation
 
-For anything about Reflex APIs — components, state management, events, styling, database, routing, authentication — use the **reflex-docs** skill rather than relying on memory. It carries current, version-accurate docs.
+For anything about Reflex APIs — components, state management, events, styling, database, routing, authentication — use the reflex-docs skill rather than relying on memory. It carries current, version-accurate docs.
 
 ### Initializing a new Reflex project
 
-When starting a new Reflex project or setting up a development environment, you **must** follow the **setup-python-env** skill before doing anything else.
+When starting a new Reflex project or setting up a development environment, you must follow the setup-python-env skill before doing anything else.
 
 Do not skip any steps. Do not assume a virtual environment or Reflex is already available — always verify first by following the skill's instructions in order.
 
@@ -52,129 +52,379 @@ Then proceed with the user's request.
 
 ### Managing a Reflex process
 
-When you need to compile, run, reload, or debug a Reflex application, follow the **reflex-process-management** skill for the correct sequence and error investigation steps.
+When you need to compile, run, reload, or debug a Reflex application, follow the reflex-process-management skill for the correct sequence and error investigation steps.
 <!-- reflex managed end -->
 
 
-# Regras do Projeto CostGuard
+# CostGuard — Project Rules
 
-## Idioma
+Estas regras são específicas do projeto CostGuard e devem ser seguidas por qualquer agente que trabalhe neste repositório.
 
-Utilizar português brasileiro na documentação do projeto, nos artefatos OpenSpec e nas explicações destinadas ao grupo.
+## 1. Idioma
 
-Nomes técnicos, identificadores, comandos, nomes de bibliotecas, APIs e termos próprios das tecnologias podem permanecer no idioma original quando apropriado.
+- A comunicação com o usuário deve ser feita em português do Brasil.
+- Documentação funcional, artefatos OpenSpec e explicações do projeto devem ser escritos em português do Brasil.
+- Código, identificadores, nomes técnicos, bibliotecas, comandos e estruturas exigidas por ferramentas podem permanecer em inglês.
+- Não traduzir nomes técnicos quando isso prejudicar precisão ou compatibilidade.
 
-## Contexto e documentação
+## 2. Fonte de verdade e documentação
 
-Antes de realizar alterações significativas, consultar os documentos de contexto do projeto disponíveis em `docs/` e os artefatos OpenSpec aplicáveis à mudança.
+Antes de propor ou implementar alterações, consultar obrigatoriamente o contexto relevante do projeto.
 
-Não inventar requisitos, regras de negócio, entidades ou comportamentos que não estejam definidos na documentação ou na change em execução.
+As principais fontes são:
 
-Quando houver ambiguidade, conflito entre documentos ou informação necessária ausente, interromper a implementação e solicitar esclarecimento.
+- `docs/project-overview.md` — visão geral, objetivos, escopo e restrições do projeto;
+- `docs/domain-model.md` — conceitos, relações, regras e invariantes do domínio;
+- `AGENTS.md` — regras operacionais para agentes;
+- `openspec/config.yaml` — contexto e regras persistentes do OpenSpec;
+- `openspec/specs/` — especificações consolidadas resultantes de Changes arquivadas;
+- `openspec/changes/` — mudanças em elaboração ou implementação;
+- `xano/` — representação local da implementação existente no backend Xano.
 
-Não alterar decisões de domínio, arquitetura ou escopo sem aprovação explícita.
+Não inventar requisitos, regras de negócio ou decisões arquiteturais.
 
-## Arquitetura
+Quando houver diferença entre documentação, especificação e implementação:
 
-O frontend do projeto deve ser implementado exclusivamente com Reflex.
+1. identificar explicitamente a divergência;
+2. informar o usuário;
+3. não decidir silenciosamente qual versão está correta;
+4. interromper a implementação caso a decisão seja necessária para continuar.
 
-Utilizar os mecanismos próprios do Reflex para componentes, estado, eventos, páginas, rotas e interação.
+Distinguir sempre entre:
 
-Não introduzir React, Vue, Angular ou outra tecnologia de frontend para substituir ou complementar o Reflex sem uma alteração arquitetural explicitamente aprovada.
+- fato confirmado;
+- requisito aprovado;
+- inferência;
+- proposta;
+- ponto desconhecido.
 
-O backend do projeto utiliza Xano.
+## 3. Arquitetura
 
-Regras de negócio, autorização e validações de segurança que não podem ser confiadas ao cliente devem ser aplicadas no backend.
+A arquitetura definida para o projeto deve ser preservada.
 
-O frontend não deve ser considerado mecanismo de segurança.
+### Frontend
 
-## Desenvolvimento
+- O frontend deve ser implementado exclusivamente com Reflex.
+- Utilizar componentes, páginas, estados, eventos e mecanismos nativos ou oficialmente suportados pelo Reflex.
+- Não introduzir React direto, Next.js, Vue, Angular ou outro framework de frontend.
+- Uma tecnologia de frontend diferente somente pode ser introduzida após decisão arquitetural explícita e aprovação do usuário.
 
-O projeto deve ser desenvolvido incrementalmente utilizando OpenSpec.
+### Backend
 
-Mudanças funcionais ou técnicas relevantes devem ser especificadas antes da implementação.
+- O backend da aplicação é Xano.
+- Regras de negócio, autorização, persistência e validações críticas devem permanecer no backend.
+- O frontend nunca deve ser considerado uma barreira de segurança.
+- Não mover lógica de segurança para o frontend apenas por conveniência.
 
-Seguir o ciclo de desenvolvimento definido para o projeto:
+### Comunicação
 
-1. Explore
-2. Propose
-3. Review
-4. Apply
-5. Archive
+O fluxo arquitetural esperado é:
 
-Não implementar funcionalidades fora do escopo da change atual sem justificativa e aprovação.
+```text
+Reflex
+   ↓ HTTP/JSON
+Xano
+   ↓
+Banco / provedores externos
+```
 
-Reutilizar código existente quando apropriado e evitar duplicação desnecessária.
+Não alterar essa divisão de responsabilidades sem aprovação explícita.
 
-Não modificar funcionalidades não relacionadas à mudança atual.
+## 4. Desenvolvimento incremental
 
-Quando uma decisão necessária não estiver prevista na documentação ou na change, interromper a implementação em vez de improvisar uma solução.
+O projeto utiliza OpenSpec como processo de desenvolvimento orientado por especificação.
 
-## Segurança
+O fluxo normal é:
 
-Não armazenar senhas, tokens, chaves de API ou outros segredos no código-fonte, documentação versionada ou frontend.
+```text
+Context
+   ↓
+Explore
+   ↓
+Propose
+   ↓
+Review
+   ↓
+Apply
+   ↓
+Verify / Test
+   ↓
+Archive
+```
 
-Credenciais utilizadas para integração com provedores cloud devem possuir apenas as permissões necessárias ao funcionamento definido pelo projeto.
+Cada Change deve:
 
-Autorização não deve depender exclusivamente de controles visuais ou verificações realizadas no frontend.
+- ter escopo claramente delimitado;
+- representar uma alteração funcional ou técnica coerente;
+- evitar misturar funcionalidades independentes;
+- possuir critérios verificáveis;
+- respeitar as dependências entre funcionalidades;
+- evitar modificações não relacionadas ao objetivo da Change.
 
-Nenhum segredo deve ser incluído em arquivos destinados ao repositório Git.
+Não implementar uma Change antes que seus artefatos tenham sido revisados.
 
-## Xano
+Não utilizar uma Change como justificativa para refatorações ou alterações fora de seu escopo.
 
-Utilizar o Xano Developer MCP para consultar documentação e validar XanoScript quando necessário.
+Quando surgir uma decisão não prevista durante `Apply`, interromper a implementação e apresentar a decisão ao usuário antes de prosseguir.
 
-Não presumir sintaxe ou comportamento específico do Xano quando houver possibilidade de consultar a documentação oficial ou o Developer MCP.
+## 5. OpenSpec
 
-Utilizar o Xano CLI para sincronização entre os arquivos locais e o workspace Xano.
+- Não criar manualmente especificações consolidadas diretamente em `openspec/specs/`.
+- As specs consolidadas devem resultar do fluxo de Changes e archive do OpenSpec.
+- Utilizar `Explore` antes de uma Change quando houver incerteza, dependências desconhecidas ou necessidade de investigar implementação existente.
+- `Propose` deve definir o problema, comportamento esperado, design necessário e tarefas antes da implementação.
+- Revisar `proposal`, `specs`, `design` e `tasks` antes de executar `Apply`.
+- Não arquivar uma Change enquanto houver divergências conhecidas entre implementação, especificação e tarefas.
+- Não marcar tarefas como concluídas sem evidência de que foram executadas.
+- Não alterar o escopo silenciosamente durante a implementação.
 
-Antes de enviar alterações ao Xano, revisar as modificações e utilizar mecanismos de validação ou `dry-run` quando disponíveis.
+## 6. Segurança
 
-Evitar operações destrutivas ou alterações fora do escopo da change atual.
+Segurança e integridade têm prioridade sobre velocidade de implementação.
 
-## Reflex
+- Nunca colocar senhas, tokens, API keys, secrets ou credenciais no código-fonte.
+- Nunca incluir segredos no Git.
+- Nunca expor credenciais no frontend.
+- Não registrar tokens, senhas ou outros segredos em logs.
+- Credenciais de provedores cloud devem utilizar somente as permissões mínimas necessárias.
+- Autenticação e autorização devem ser validadas pelo backend.
+- Falhas de importação, autenticação, integração ou processamento não devem ser silenciosas.
+- Mensagens de autenticação e recuperação de acesso não devem permitir enumeração indevida de usuários.
+- Não reduzir controles de segurança apenas para facilitar testes ou desenvolvimento.
 
-Antes de escrever ou alterar código Reflex, utilizar as Agent Skills do Reflex quando estiverem disponíveis no agente utilizado.
+Caso um segredo seja encontrado no código ou em arquivo versionável, interromper e informar imediatamente o usuário.
 
-Consultar documentação atualizada do Reflex para componentes, State, eventos, rotas, autenticação e demais recursos específicos do framework.
+## 7. Xano
 
-O projeto utiliza `venv` e `pip` para gerenciamento do ambiente Python e dependências.
+O diretório `xano/` representa localmente a implementação do backend e deve ser tratado como código do projeto.
 
-Não introduzir `uv`, Poetry, Conda ou outro gerenciador de ambiente ou dependências sem uma decisão explícita do projeto.
+Ao trabalhar com Xano:
 
-## Testes e verificação
+- utilizar o Xano Developer MCP para consultar documentação e validar sintaxe ou comportamento quando necessário;
+- não presumir comportamento específico do Xano quando ele puder ser confirmado pela documentação;
+- utilizar o Xano CLI para sincronização do workspace quando necessário;
+- analisar o código `.xs` existente antes de propor substituições;
+- reaproveitar implementação existente que esteja de acordo com a especificação;
+- não reimplementar algo apenas porque foi criado antes da adoção do OpenSpec;
+- não fazer alterações arbitrárias no schema ou APIs fora do escopo da Change atual;
+- não incluir dados, registros ou variáveis de ambiente sensíveis no repositório.
 
-Mudanças funcionais devem possuir uma estratégia de verificação.
+Quando houver diferença entre o código Xano existente e a documentação do projeto, registrar a divergência antes de corrigi-la.
 
-Antes de considerar uma tarefa concluída:
+## 8. Reflex
 
-- executar as verificações relevantes;
-- verificar erros de execução;
-- confirmar que a implementação corresponde à especificação aprovada;
-- verificar se não houve alteração não intencional em funcionalidades relacionadas.
+O ambiente Python do projeto utiliza:
 
-Uma tarefa não deve ser considerada concluída apenas porque o código foi gerado sem erro aparente.
+```text
+venv + pip
+```
 
-## Git
+- Utilizar `.venv` como ambiente virtual local.
+- Não versionar `.venv/`.
+- Não introduzir `uv`, Poetry, Pipenv ou outro gerenciador de ambiente/dependências sem decisão explícita.
+- Manter `requirements.txt` coerente com as dependências efetivamente utilizadas.
+- Antes de alterar código Reflex, consultar as Reflex Agent Skills relevantes quando disponíveis.
+- Para APIs e comportamentos do Reflex, preferir documentação atual em vez de conhecimento presumido.
+- Não substituir funcionalidades nativas do Reflex por soluções externas sem necessidade comprovada.
 
-Não versionar arquivos contendo credenciais, segredos, ambientes virtuais ou artefatos locais gerados.
+## 9. Testes e verificação
 
-Não versionar `.venv/`, `.web/`, arquivos `.env` ou outras configurações locais contendo informações sensíveis.
+Uma implementação não deve ser considerada concluída apenas porque o código foi escrito.
 
-Manter os commits relacionados à mudança em execução.
+Antes de declarar uma tarefa ou Change como concluída:
 
-Evitar incluir no mesmo commit alterações não relacionadas.
+- verificar se o código compila;
+- executar os testes aplicáveis;
+- validar os fluxos afetados;
+- verificar erros no terminal/log;
+- confirmar integração entre Reflex e Xano quando a Change envolver ambos;
+- confrontar o resultado com os critérios definidos na especificação;
+- verificar se nenhuma funcionalidade fora do escopo foi alterada inadvertidamente.
 
-Revisar `git diff` antes de realizar commits relevantes.
+Se algum teste não puder ser executado, informar explicitamente:
 
-## OpenSpec
+- qual teste não foi executado;
+- por que não foi executado;
+- qual risco permanece.
 
-O OpenSpec é a fonte do processo incremental de desenvolvimento do projeto.
+Nunca afirmar que algo foi testado sem ter evidência da execução.
 
-Não criar funcionalidades diretamente em `openspec/specs/` apenas porque fazem parte da visão futura do sistema.
+## 10. Git — modelo de branches
 
-As specs consolidadas devem resultar das changes implementadas e arquivadas.
+Toda feature ou Change funcional deve possuir sua própria branch Git.
 
-Antes de iniciar uma implementação relevante, verificar se existe uma change correspondente e se seus artefatos foram revisados.
+O fluxo padrão é:
 
-Quando uma implementação contradizer a especificação, a especificação ou a change deve ser revisada antes de prosseguir.
+```text
+main
+  ↓
+nova branch da feature
+  ↓
+OpenSpec Change
+  ↓
+implementação
+  ↓
+testes e validação
+  ↓
+archive
+  ↓
+revisão pelo usuário
+  ↓
+commit / push
+  ↓
+integração na main
+```
+
+Regras:
+
+- Não desenvolver features diretamente na `main`.
+- Cada Change funcional do OpenSpec deve ser desenvolvida em uma branch própria.
+- A branch deve partir da `main` atualizada.
+- Preferir nomes descritivos, por exemplo:
+
+```text
+feature/autenticacao-base
+feature/projetos-orcamento
+feature/importacao-recursos
+```
+
+- Uma branch deve conter apenas alterações relacionadas à Change correspondente.
+- Não misturar features independentes na mesma branch.
+- Uma nova feature deve iniciar em uma nova branch criada a partir da `main` atualizada.
+- A integração da branch com a `main` é responsabilidade do usuário.
+
+## 11. Git — operações reservadas ao usuário
+
+O usuário mantém controle exclusivo sobre staging, commits, publicação e integração do histórico Git.
+
+O agente NUNCA deve executar:
+
+```text
+git add
+git commit
+git push
+git merge
+git rebase
+git reset
+git revert
+git tag
+git stash
+git clean
+```
+
+O agente também não deve:
+
+- criar branch por conta própria;
+- trocar de branch por conta própria;
+- excluir branch;
+- alterar histórico;
+- realizar force push;
+- utilizar comandos equivalentes que produzam o mesmo efeito;
+- interpretar uma solicitação de implementação como autorização implícita para executar operações Git.
+
+Caso seja necessário criar ou trocar de branch, o agente deve informar ao usuário o comando correspondente e aguardar que o usuário o execute.
+
+O agente pode executar comandos Git somente de inspeção, desde que não modifiquem o repositório, por exemplo:
+
+```text
+git status
+git status --short
+git diff
+git diff --stat
+git log
+git branch --show-current
+git remote -v
+git ls-files
+```
+
+### Ao finalizar uma etapa
+
+Quando uma etapa estiver pronta para ser registrada no Git, o agente deve parar e fornecer ao usuário:
+
+1. resumo das alterações realizadas;
+2. lista dos arquivos que devem entrar no commit;
+3. comando `git add` exato;
+4. mensagem sugerida para o commit;
+5. indicação de que o usuário deve executar os comandos.
+
+O agente deve preferir:
+
+```bash
+git add arquivo1 arquivo2 arquivo3
+```
+
+em vez de:
+
+```bash
+git add .
+```
+
+O objetivo é permitir que o usuário saiba exatamente o que está sendo colocado no stage.
+
+Exemplo de entrega:
+
+```text
+Arquivos para staging:
+- AGENTS.md
+- openspec/changes/autenticacao-base/proposal.md
+- openspec/changes/autenticacao-base/specs/...
+- openspec/changes/autenticacao-base/design.md
+- openspec/changes/autenticacao-base/tasks.md
+
+Comando sugerido:
+git add AGENTS.md openspec/changes/autenticacao-base/
+
+Commit sugerido:
+git commit -m "docs: define authentication base change"
+```
+
+O agente fornece essas instruções, mas não as executa.
+
+O mesmo princípio vale para `git push`, merge ou qualquer integração com a `main`: o agente pode fornecer o comando, mas o usuário é quem executa.
+
+## 12. Controle de mudanças
+
+Não alterar:
+
+- stack tecnológica;
+- arquitetura;
+- escopo funcional;
+- regras de negócio;
+- modelo de segurança;
+- processo OpenSpec;
+- estratégia de branches;
+- política de Git definida neste arquivo;
+
+sem aprovação explícita do usuário.
+
+Caso uma alternativa técnica pareça superior, o agente pode apresentá-la com:
+
+- problema identificado;
+- alternativa proposta;
+- vantagens;
+- riscos;
+- impacto no projeto.
+
+Mas não deve aplicar a alteração antes da decisão do usuário.
+
+## 13. Conduta analítica
+
+O agente deve priorizar, nesta ordem:
+
+1. fatos e evidências;
+2. requisitos aprovados;
+3. segurança e integridade;
+4. qualidade e manutenibilidade;
+5. velocidade.
+
+Não inventar informações para preencher lacunas.
+
+Quando não houver evidência suficiente, declarar explicitamente que a informação é desconhecida ou precisa ser investigada.
+
+Não tratar implementação existente como automaticamente correta.
+
+Não tratar documentação antiga como automaticamente correta.
+
+Confrontar implementação, documentação e especificação quando necessário.
+
+Se houver conflito relevante, apresentar o conflito ao usuário antes de tomar uma decisão.
