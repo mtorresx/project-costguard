@@ -22,9 +22,9 @@ query me verb=GET {
     // Monta a resposta com os dados atuais do banco
     var $dados_usuario {
       value = {
-        usuario: $usuario_atual.usuario
-        nome   : $usuario_atual.nome
-        role   : $usuario_atual.role
+        username: $usuario_atual.username
+        nome    : $usuario_atual.nome
+        role    : $usuario_atual.role
       }
     }
   }

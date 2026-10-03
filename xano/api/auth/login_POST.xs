@@ -2,15 +2,15 @@ query login verb=POST {
   api_group = "auth"
 
   input {
-    text usuario
-    text senha
+    text username
+    text password
   }
 
   stack {
     // Busca o usuário no banco
     db.get usuarios {
-      field_name = "usuario"
-      field_value = $input.usuario
+      field_name = "username"
+      field_value = $input.username
     } as $usuario_encontrado
   
     // Mensagem de erro
@@ -38,7 +38,7 @@ query login verb=POST {
   
     // Compara a senha
     security.check_password {
-      text_password = $input.senha
+      text_password = $input.password
       hash_password = $usuario_encontrado.senha_hash
     } as $senha_correta
   
@@ -55,7 +55,7 @@ query login verb=POST {
       table = "usuarios"
       extras = {
         usuario_id: $usuario_encontrado.id
-        usuario   : $usuario_encontrado.usuario
+        username  : $usuario_encontrado.username
         role      : $usuario_encontrado.role
       }
     
