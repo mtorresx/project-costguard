@@ -22,7 +22,7 @@ A resposta de `/me` SHALL ter a forma (podendo conter campos adicionais como `no
 
 A coluna de identificação do usuário na tabela `usuarios` SHALL ser nomeada `username`, de modo que o nome do campo persistido seja consistente com o contrato.
 
-O campo de senha persistido SHALL permanecer um campo seguro do tipo `password` do Xano (credencial com hash) e MUST NOT ser renomeado nesta change: permanece como `senha_hash`. O contrato externo usa `password` apenas como chave de input; a coluna continua sendo credencial protegida.
+O campo de senha persistido SHALL ser um campo seguro do tipo `password` do Xano (credencial com hash), nomeado `senha_hash`. O contrato externo usa `password` apenas como chave de input; a coluna permanece credencial protegida e não é exposta.
 
 #### Scenario: Login aceita o contrato padronizado
 
