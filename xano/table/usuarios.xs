@@ -4,7 +4,7 @@ table usuarios {
   schema {
     int id
     text nome filters=trim
-    text usuario filters=trim
+    text username filters=trim
     email email filters=trim|lower
     password senha_hash {
       sensitive = true
@@ -26,7 +26,7 @@ table usuarios {
   index = [
     {type: "primary", field: [{name: "id"}]}
     {type: "btree", field: [{name: "created_at", op: "desc"}]}
-    {type: "btree|unique", field: [{name: "usuario", op: "asc"}]}
+    {type: "btree|unique", field: [{name: "username", op: "asc"}]}
     {type: "btree|unique", field: [{name: "email", op: "asc"}]}
   ]
 

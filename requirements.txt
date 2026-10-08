@@ -1,2 +1,2 @@
-
+python-dotenv==1.2.4
 reflex==0.9.12
