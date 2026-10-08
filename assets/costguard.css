@@ -1,0 +1,219 @@
+/* ============================================================
+   CostGuard Design System — Dark Kinetic
+   Google Fonts
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+/* ── Tokens globais ── */
+:root {
+  --cg-background:            #0b1326;
+  --cg-surface:               #1e293b;
+  --cg-surface-low:           #131b2e;
+  --cg-input-bg:              #1e293b;
+  --cg-primary:               #14b8a6;
+  --cg-primary-accent:        #4fdbc8;
+  --cg-on-primary:            #003731;
+  --cg-border-input:          #334155;
+  --cg-border-subtle:         rgba(255, 255, 255, 0.08);
+  --cg-text-high:             #f8fafc;
+  --cg-text-main:             #dae2fd;
+  --cg-text-med:              #94a3b8;
+  --cg-text-low:              #64748b;
+  --cg-error:                 #ef4444;
+}
+
+/* ── Fundo global ── */
+html, body {
+  background-color: var(--cg-background) !important;
+  color: var(--cg-text-main);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Correção do background azul do Radix nos inputs ──
+   O Radix injeta background via --accent-* vars e via sua
+   folha de estilos. Sobrescrevemos com !important nos
+   seletores específicos do TextFieldRoot.               */
+
+/* Wrapper externo do input (rt-TextFieldRoot) */
+.rt-TextFieldRoot {
+  background-color: var(--cg-input-bg) !important;
+  border: 1px solid var(--cg-border-input) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+
+/* O <input> interno */
+.rt-TextFieldInput {
+  background-color: transparent !important;
+  color: var(--cg-text-main) !important;
+  caret-color: var(--cg-primary-accent);
+}
+
+.rt-TextFieldInput::placeholder {
+  color: var(--cg-text-low) !important;
+}
+
+/* Remove qualquer overlay/highlight azul no focus */
+.rt-TextFieldRoot:focus-within {
+  border-color: var(--cg-primary) !important;
+  box-shadow: 0 0 0 1px var(--cg-primary) !important;
+  outline: none !important;
+}
+
+/* Remove o fundo azul que o Radix aplica via --accent-indicator */
+.rt-TextFieldRoot::before,
+.rt-TextFieldRoot::after {
+  display: none !important;
+}
+
+/* ── Card Dark Kinetic ── */
+.cg-login-card {
+  background-color: var(--cg-surface) !important;
+  border: 1px solid var(--cg-border-subtle) !important;
+  border-radius: 8px !important;
+}
+
+@media (max-width: 640px) {
+  .cg-login-card {
+    padding: 24px !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    min-height: 100dvh;
+  }
+}
+
+/* ── Card Dark Kinetic (uso geral em painéis/tabelas) ── */
+.cg-card {
+  background-color: var(--cg-surface-low);
+  border: 1px solid var(--cg-border-subtle);
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cg-card:hover {
+  box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.4);
+  border-color: rgba(20, 184, 166, 0.3);
+}
+
+.cg-glow-active {
+  box-shadow: 0 0 16px -2px rgba(20, 184, 166, 0.25);
+}
+
+.cg-glow-effect:focus-within {
+  box-shadow: 0 0 12px -2px rgba(20, 184, 166, 0.2);
+}
+
+.cg-tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Scrollbar sutil ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--cg-background);
+}
+::-webkit-scrollbar-thumb {
+  background: #2d3449;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3e495d;
+}
+
+/* ── Shell com sidebar fixa (ver costguard/components/layout.py) ── */
+.cg-sidenav {
+  background-color: var(--cg-background);
+  width: 16rem;
+  height: 100%;
+  position: fixed;
+  left: 0;
+  top: 0;
+  border-right: 1px solid var(--cg-border-subtle);
+  z-index: 50;
+}
+
+.cg-topnav {
+  background-color: var(--cg-background);
+  height: 4rem;
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--cg-border-subtle);
+  width: calc(100% - 16rem);
+}
+
+.cg-main-content {
+  margin-left: 16rem;
+  padding-top: 4rem;
+  min-height: 100dvh;
+}
+
+.cg-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--cg-text-med);
+  transition: all 0.2s ease;
+}
+
+.cg-nav-link:hover {
+  color: var(--cg-text-main);
+  background-color: rgba(45, 52, 73, 0.4);
+}
+
+.cg-nav-link.active {
+  color: var(--cg-primary-accent);
+  font-weight: 700;
+  border-right: 2px solid var(--cg-primary-accent);
+  background-color: rgba(79, 219, 200, 0.1);
+}
+
+/* ── Overlay dos modais (Radix Dialog) ──
+   O Reflex/Radix não expõe o overlay como prop de componente — a classe
+   .rt-BaseDialogOverlay é gerada pelo @radix-ui/themes. O escurecimento já
+   vem por padrão (var(--color-overlay)); aqui só acrescentamos o blur do
+   conteúdo atrás do modal. */
+.rt-BaseDialogOverlay::before {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── Item selecionado nos dropdowns (Radix Select) ──
+   O item ativo já ganha fundo azul sólido via variant="solid" (ver
+   rx.select.content nas páginas). O checkmark ao lado do texto é
+   estrutural do Radix e não some só trocando o variant — escondido
+   aqui para bater com a referência (fundo cheio, sem ícone). */
+.rt-SelectItemIndicator {
+  display: none;
+}
+
+/* ── Hover nos itens do dropdown ──
+   O [data-highlighted] do Radix (usado por variant="solid" para o fundo
+   azul) depende de navegação/foco via JS e nem sempre acompanha o mouse
+   de forma perceptível. Aqui garantimos feedback visual sempre que o
+   cursor passa sobre qualquer item, com transição suave, sem depender
+   desse estado. */
+.rt-SelectItem {
+  transition: background-color 0.15s ease;
+}
+
+.rt-SelectItem:hover {
+  background-color: rgba(100, 116, 139, 0.25); /* cinza-azulado sutil */
+}
+
+/* Item já selecionado (fundo azul do variant="solid") recebe uma
+   variação de tom no hover, para diferenciar de "selecionado parado"
+   sem perder o destaque. */
+.rt-SelectContent.rt-variant-solid .rt-SelectItem[data-state='checked']:hover {
+  background-color: var(--accent-10);
+}

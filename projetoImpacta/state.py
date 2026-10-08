@@ -47,6 +47,16 @@ class AuthState(rx.State):
         """Indica se há uma sessão autenticada no cliente."""
         return self.token != ""
 
+    @rx.var
+    def is_admin(self) -> bool:
+        """Derivado da role atual (apenas apresentação; autorização real é no Xano)."""
+        return self.role == "admin"
+
+    @rx.var
+    def initial(self) -> str:
+        """Inicial do username para o avatar da interface."""
+        return self.username[:1].upper() if self.username else "?"
+
     def _clear_session(self) -> None:
         """Descarta a sessão local (token e identidade)."""
         self.token = ""
