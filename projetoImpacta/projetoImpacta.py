@@ -1,53 +1,41 @@
-"""Aplicação CostGuard (Reflex) — autenticação base.
+"""Aplicação CostGuard (Reflex).
 
-Rotas desta change:
-- /login : página pública de login.
-- /      : área autenticada mínima protegida (não é o dashboard definitivo).
+Rotas:
+- /login     : página pública de login (único público).
+- /          : home autenticada (área principal).
+- /projetos  : projetos (apresentação/mock).
+- /provedores: provedores (apresentação/mock).
+- /alertas   : alertas (apresentação/mock).
+- /usuarios  : usuários (apresentação/mock).
 
-A proteção de /` é de navegação/UX (on_load + redirect). A autorização real
-permanece no backend Xano.
+Todas as rotas além de /login exigem sessão autenticada: `on_load=require_auth`
+valida o token no backend via /me (ver state.py). A autorização real permanece
+no Xano; o frontend não é mecanismo de segurança.
+
+Design, componentes e assets incorporados do frontend externo (ver change
+integracao-frontend); a autenticação é a do projeto principal (AuthState).
 """
 
 import reflex as rx
 
+from .pages.alertas import alertas_page
+from .pages.home import home_page
 from .pages.login import login_page
+from .pages.projetos import projetos_page
+from .pages.provedores import provedores_page
+from .pages.usuarios import usuarios_page
 from .state import AuthState
 
+app = rx.App(
+    stylesheets=["/costguard.css"],
+)
 
-def index() -> rx.Component:
-    """Área autenticada mínima. Protegida por on_load=AuthState.require_auth."""
-    return rx.center(
-        rx.card(
-            rx.vstack(
-                rx.heading("CostGuard", size="7"),
-                rx.text("Área autenticada", size="3"),
-                rx.text(
-                    rx.text.strong("Usuário: "),
-                    AuthState.username,
-                    size="2",
-                ),
-                rx.text(
-                    rx.text.strong("Papel: "),
-                    AuthState.role,
-                    size="2",
-                ),
-                rx.button(
-                    "Sair",
-                    on_click=AuthState.logout,
-                    color_scheme="gray",
-                    variant="soft",
-                ),
-                spacing="3",
-                align="start",
-            ),
-            width="22rem",
-        ),
-        min_height="100vh",
-    )
-
-
-app = rx.App()
-# Área autenticada: verifica a sessão no carregamento (D6).
-app.add_page(index, route="/", on_load=AuthState.require_auth)
 # Página pública de login.
-app.add_page(login_page, route="/login")
+app.add_page(login_page, route="/login", title="Login — CostGuard")
+
+# Área autenticada: cada página valida a sessão no carregamento.
+app.add_page(home_page, route="/", title="CostGuard", on_load=AuthState.require_auth)
+app.add_page(projetos_page, route="/projetos", title="Projetos — CostGuard", on_load=AuthState.require_auth)
+app.add_page(provedores_page, route="/provedores", title="Provedores — CostGuard", on_load=AuthState.require_auth)
+app.add_page(alertas_page, route="/alertas", title="Alertas — CostGuard", on_load=AuthState.require_auth)
+app.add_page(usuarios_page, route="/usuarios", title="Usuários — CostGuard", on_load=AuthState.require_auth)
