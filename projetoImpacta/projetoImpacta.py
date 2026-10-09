@@ -22,6 +22,7 @@ from .pages.alertas import alertas_page
 from .pages.home import home_page
 from .pages.login import login_page
 from .pages.projetos import projetos_page
+from .pages.projetos_state import ProjetosState
 from .pages.provedores import provedores_page
 from .pages.usuarios import usuarios_page
 from .state import AuthState
@@ -35,7 +36,12 @@ app.add_page(login_page, route="/login", title="Login — CostGuard")
 
 # Área autenticada: cada página valida a sessão no carregamento.
 app.add_page(home_page, route="/", title="CostGuard", on_load=AuthState.require_auth)
-app.add_page(projetos_page, route="/projetos", title="Projetos — CostGuard", on_load=AuthState.require_auth)
+app.add_page(
+    projetos_page,
+    route="/projetos",
+    title="Projetos — CostGuard",
+    on_load=[AuthState.require_auth, ProjetosState.carregar],
+)
 app.add_page(provedores_page, route="/provedores", title="Provedores — CostGuard", on_load=AuthState.require_auth)
 app.add_page(alertas_page, route="/alertas", title="Alertas — CostGuard", on_load=AuthState.require_auth)
 app.add_page(usuarios_page, route="/usuarios", title="Usuários — CostGuard", on_load=AuthState.require_auth)
