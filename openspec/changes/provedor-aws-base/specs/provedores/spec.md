@@ -29,7 +29,7 @@ O sistema SHALL aceitar, nesta fase, apenas provedores do tipo `aws`. Uma tentat
 
 ### Requirement: Credencial AWS somente leitura e nunca exposta
 
-O sistema SHALL tratar a credencial AWS como uma chave de acesso composta por um identificador público (`access_key_id`) e um segredo (`secret_access_key`). O segredo SHALL ser armazenado de forma protegida no backend e MUST NOT ser retornado em nenhuma resposta de API (nem em listagem, nem em detalhe, nem após criação ou edição). O sistema MUST NOT registrar o segredo em logs. A credencial SHALL possuir apenas permissões de leitura; o CostGuard MUST NOT depender de permissões de escrita no provedor. Após salvo, o segredo MUST NOT ser reapresentado ao usuário; a troca do segredo SHALL ocorrer apenas pelo reenvio de um novo valor.
+O sistema SHALL tratar a credencial AWS como uma chave de acesso composta por um identificador público (`access_key_id`) e um segredo (`secret_access_key`), provenientes de uma credencial IAM dedicada. O segredo SHALL ser armazenado de forma cifrada e protegida no backend e MUST NOT ser retornado em nenhuma resposta de API (nem em listagem, nem em detalhe, nem após criação ou edição). O sistema MUST NOT registrar o segredo em logs. O mecanismo de cifra MUST NOT reutilizar um vetor de inicialização (IV/nonce) fixo e global: cada gravação do segredo SHALL usar um IV/nonce único (armazenado de forma privada junto ao ciphertext) ou um mecanismo de criptografia autenticada que gerencie o nonce com segurança. A credencial SHALL possuir apenas permissões de leitura (privilégio mínimo) e MUST NOT ser uma credencial root; o CostGuard MUST NOT depender de permissões de escrita no provedor. Após salvo, o segredo MUST NOT ser reapresentado ao usuário; a troca do segredo SHALL ocorrer apenas pelo reenvio de um novo valor.
 
 #### Scenario: Listagem não contém o segredo
 
@@ -51,6 +51,11 @@ O sistema SHALL tratar a credencial AWS como uma chave de acesso composta por um
 - **WHEN** um admin abre a edição de um provedor já cadastrado
 - **THEN** o segredo salvo não é devolvido pelo backend nem reexibido na interface
 - **AND** para alterar o segredo o admin precisa informar um novo valor
+
+#### Scenario: IV/nonce não é fixo nem reutilizado globalmente
+
+- **WHEN** o segredo de dois provedores (ou do mesmo provedor em gravações distintas) é cifrado
+- **THEN** cada gravação usa um IV/nonce único, nunca um IV fixo compartilhado entre as gravações
 
 ### Requirement: Leitura de provedores por usuário autenticado
 
@@ -116,12 +121,13 @@ O sistema SHALL permitir a edição de provedor apenas a admin, validando a auto
 
 ### Requirement: Teste de conexão AWS restrito a admin
 
-O sistema SHALL permitir que um admin teste a conexão de um provedor AWS. O teste SHALL ser executado no backend, usando a credencial armazenada do provedor para realizar uma chamada somente leitura à AWS que confirme a validade da credencial. O resultado do teste SHALL atualizar o `status` do provedor: `ok` quando a credencial é válida e a chamada é bem-sucedida, `erro` quando a credencial é inválida ou a chamada falha. O teste MUST NOT exigir que o segredo seja enviado pelo frontend, e a resposta do teste MUST NOT conter o segredo. A falha de conexão MUST NOT ser silenciosa: o backend SHALL retornar uma indicação de falha ao solicitante.
+O sistema SHALL permitir que um admin teste a conexão de um provedor AWS. O teste SHALL ser executado no backend, usando a credencial armazenada do provedor para realizar uma chamada somente leitura à AWS (STS `GetCallerIdentity`) que confirme a validade da credencial. O resultado do teste SHALL atualizar o `status` do provedor: `ok` quando a credencial é autenticada com sucesso, `erro` quando a credencial é inválida ou a chamada falha. O `status = ok` SHALL significar apenas que a credencial AWS foi autenticada com sucesso e MUST NOT ser interpretado como confirmação de que as demais permissões necessárias ao CostGuard (ex.: Cost Explorer, listagem de recursos) estão disponíveis; essa validação pertence à funcionalidade de importação AWS. O teste MUST NOT exigir que o segredo seja enviado pelo frontend, e a resposta do teste MUST NOT conter o segredo. A falha de conexão MUST NOT ser silenciosa: o backend SHALL retornar uma indicação de falha ao solicitante.
 
 #### Scenario: Teste bem-sucedido atualiza status para ok
 
 - **WHEN** um admin testa a conexão de um provedor cuja credencial AWS é válida
-- **THEN** o backend confirma a conexão, define o `status` do provedor como `ok` e retorna sucesso sem o segredo
+- **THEN** o backend confirma a autenticação da credencial (STS), define o `status` do provedor como `ok` e retorna sucesso sem o segredo
+- **AND** o `status = ok` indica apenas credencial autenticada, não a validação de todas as permissões futuras do CostGuard
 
 #### Scenario: Teste com credencial inválida atualiza status para erro
 

@@ -8,7 +8,7 @@ Estado atual relevante (verificado no repositório):
 - **Projetos (`projetos`)**: padrão de endpoint protegido já consolidado no api_group `app`. Para escrita: `auth = "usuarios"`, `db.get usuarios` por `$auth.id`, `precondition ($usuario_logado != null)` (unauthorized) e `precondition ($usuario_logado.role == "admin")` (accessdenied). Leitura exige apenas sessão (`auth = "usuarios"` garante 401 sem token). As respostas são montadas por `var $resposta` explícito, retornando só os campos desejados. Desativação lógica via `db.edit ... status = "inativo"` (sem DELETE). Validações por `precondition`.
 - **api_group `app`**: já existe (`xano/api/app/app.xs`, canonical `costguard-app`) e hospeda as rotas de Projetos. As rotas de Provedores serão adicionadas a este mesmo grupo (conforme pedido).
 - **Frontend (`interface-frontend` / `projetos`)**: `/provedores` existe como apresentação/mock (`projetoImpacta/pages/provedores.py`), dentro do app shell, protegida por `on_load=AuthState.require_auth`. O padrão de página com dados reais já existe em `projetos.py` + `projetos_state.py`: um `rx.State` dedicado envia `Authorization: Bearer <token>`, trata 401 via `AuthState.handle_unauthenticated`, e os controles de escrita ficam sob `rx.cond(AuthState.is_admin, ...)`. `config.py` expõe `XANO_APP_BASE_URL` (env) via `get_xano_app_base_url()`.
-- **Documentação Xano (verificada via Xano Developer MCP)**: `security.encrypt`/`security.decrypt` (ex.: `aes-256-cbc`) com `key`/`iv` em `$env`; campos de tabela aceitam `visibility = "private"`; inputs e campos aceitam `sensitive = true` (mascara em logs); `api.request` permite chamadas HTTP de saída (para a AWS). O tipo `password` é hash unidirecional — inadequado aqui, pois o segredo precisa ser recuperado para chamar a AWS no teste de conexão.
+- **Documentação Xano (verificada via Xano Developer MCP e docs.xano.com)**: as funções **Encrypt Data**/**Decrypt Data** recebem `algorithm`, `key` e `initialization vector` (IV) **explícitos** — não há gerenciamento automático de nonce para o cifrador simétrico; existe `security.create_random_bytes` para gerar bytes aleatórios (IV por gravação); existe criptografia autenticada (AEAD) via **JWE** (`jwe_encode`/`jwe_decode`, com `KEY_ALGORITHM`/`CONTENT_ALGORITHM`), que gerencia o próprio IV internamente. Campos de tabela aceitam `visibility = "private"`; inputs e campos aceitam `sensitive = true` (mascara em logs); `api.request` permite chamadas HTTP de saída (para a AWS). O tipo `password` é hash unidirecional — inadequado aqui, pois o segredo precisa ser recuperado para chamar a AWS no teste de conexão. A lista exata de algoritmos aceitos pelo `encrypt` (ex.: disponibilidade de `aes-256-gcm`) será confirmada no Apply via Xano MCP.
 
 ## Goals / Non-Goals
 
@@ -51,6 +51,13 @@ table provedores {
       sensitive = true
       visibility = "private"
     }
+    // IV/nonce aleatório desta gravação (ver D4). Único por gravação; privado.
+    // Presente apenas quando o cifrador simétrico com IV explícito é usado
+    // (não necessário se o segredo for protegido via JWE, que embute o IV).
+    text aws_secret_iv? {
+      sensitive = true
+      visibility = "private"
+    }
     enum status?=pendente {
       values = ["pendente", "ok", "erro", "inativo"]
     }
@@ -69,6 +76,7 @@ table provedores {
 - `tipo` e `tipo_credencial` são `enum` restritos a um único valor nesta fase (`aws` / `aws_access_key`), tornando o suporte exclusivo a AWS uma garantia de schema além da precondition.
 - `aws_access_key_id` é a parte **pública** da credencial. Não é segredo, mas marcada `sensitive = true` por precaução de log. Pode ser exibida (ex.: mascarada) sem violar a regra — a decisão de exibi-la ou não é tratada em D6.
 - `aws_secret_cifrado` guarda o segredo **cifrado** (D4), com `visibility = "private"` (fica fora de retornos padrão) e `sensitive = true`. Nenhum endpoint o coloca na resposta.
+- `aws_secret_iv` guarda o **IV/nonce aleatório desta gravação** (D4), também `private` + `sensitive`. É único por gravação e nunca reutilizado; existe apenas no caminho de cifrador simétrico com IV explícito (dispensável no caminho JWE, que embute o IV no token).
 - `status` inclui `pendente` (recém-criado, sem teste), `ok`, `erro` e `inativo` (desativação lógica).
 - Diferente de `projetos`, não há índice único óbvio obrigatório; `identificador_conta` poderia repetir entre contas/credenciais, então não se impõe unicidade nesta fase (ponto aberto Q1).
 
@@ -102,24 +110,30 @@ precondition ($usuario_logado.role == "admin") { error_type = "accessdenied" ...
 
 A autorização real é sempre no backend; o frontend nunca decide acesso.
 
-### D4 — Estratégia de credencial (DECISÃO DE SEGURANÇA — requer aprovação)
+### D4 — Estratégia de credencial (DECISÃO DE SEGURANÇA — aprovada com ajustes)
 
 **Problema:** o `secret_access_key` precisa ser (a) nunca exposto ao frontend, (b) nunca hardcoded/versionado, e (c) **recuperável pelo backend** para chamar a AWS no teste de conexão. Isso descarta hash unidirecional (tipo `password`).
 
-**Abordagem escolhida (proposta): cifra simétrica no backend.**
-- Na criação/edição, o backend cifra o `aws_secret_access_key` recebido via `security.encrypt` (`aes-256-cbc`) usando `key`/`iv` lidos de **variáveis de ambiente do Xano** (`$env.PROV_ENC_KEY`, `$env.PROV_ENC_IV`), e grava o resultado em `aws_secret_cifrado`.
-- No teste de conexão, o backend lê `aws_secret_cifrado`, decifra com `security.decrypt` e usa o segredo em memória apenas para a chamada à AWS. O segredo decifrado nunca é retornado nem logado.
-- `aws_secret_cifrado` é `visibility = "private"`; nenhum endpoint o inclui na resposta.
+**Regra aprovada (obrigatória):** a chave de cifra permanece em `$env.PROV_ENC_KEY` (Xano), mas **NÃO** pode haver IV fixo global. Prefere-se criptografia autenticada (AEAD) com gerenciamento seguro de nonce/IV; se for necessário fornecer IV explicitamente, ele deve ser **aleatório por gravação**, armazenado junto ao ciphertext e nunca reutilizado.
+
+**Abordagem escolhida: cifra autenticada no backend, com IV por gravação.**
+
+- *Caminho preferencial (AEAD/JWE):* proteger o segredo via `jwe_encode` usando a chave de `$env.PROV_ENC_KEY`, gravando o token resultante em `aws_secret_cifrado`. O JWE gerencia o próprio IV/nonce internamente e provê autenticidade (integridade) além de confidencialidade; nesse caminho `aws_secret_iv` não é necessário. O teste de conexão decifra com `jwe_decode`.
+- *Caminho alternativo (cifrador simétrico com IV explícito):* se, após confirmação na documentação do Xano, o JWE não for adequado ao caso, usar `security.encrypt`/`security.decrypt` com `key = $env.PROV_ENC_KEY` e um **IV aleatório gerado a cada gravação** via `security.create_random_bytes`. O IV é persistido em `aws_secret_iv` (privado) ao lado de `aws_secret_cifrado`; na edição que troca o segredo, gera-se um **novo** IV. Preferir um algoritmo com autenticação (ex.: `aes-256-gcm`) se o `encrypt` do Xano o oferecer; caso só CBC esteja disponível, manter o IV aleatório por gravação. **Em nenhum caso usar um IV fixo global.**
+- Em ambos os caminhos, o segredo decifrado existe apenas em memória durante a chamada à AWS, nunca é retornado nem logado. `aws_secret_cifrado` e `aws_secret_iv` são `visibility = "private"`; nenhum endpoint os inclui na resposta.
+
+**Decisão final (confirmada no Apply via Xano MCP):** escolhido o **caminho JWE (AEAD)**. O filtro `jwe_encode` do Xano gera um token com IV/nonce gerenciado internamente e autenticação (integridade), usando `key_algorithm = "A256KW"` e `content_algorithm = "A256CBC-HS512"` (AES-256-CBC + HMAC-SHA-512). A chave vem de `$env.PROV_ENC_KEY` (string ≥ 256 bits). Assinatura confirmada na doc: `"segredo"|jwe_encode:{headers}:"<key>":"A256KW":"A256CBC-HS512"` e `$token|jwe_decode:{}:"<key>":"A256KW":"A256CBC-HS512"`. Como o JWE embute o IV, **o campo `aws_secret_iv` não é usado** nesta implementação; ele permanece no schema como reservado/compatível (dispensável neste caminho), conforme já previsto no design. Isso satisfaz a regra aprovada: chave única em `$env`, sem IV fixo global, nonce gerenciado por gravação. O caminho simétrico `encrypt`/`decrypt` (que no Xano exige IV explícito — confirmado: só modos CBC como `aes-128/192/256-cbc`, sem GCM nativo) fica como alternativa não adotada.
 
 **Alternativas consideradas:**
+- *IV fixo global em `$env` (`PROV_ENC_IV`):* **rejeitado por decisão do usuário** — reutilizar um mesmo IV com a mesma chave em AES-CBC vaza informação entre ciphertexts e é prática insegura. Substituído por IV aleatório por gravação ou AEAD/JWE.
 - *Tipo `password` (hash):* rejeitado — hash é irreversível; impossível reusar o segredo para chamar a AWS.
 - *Guardar o segredo em texto puro na tabela:* rejeitado — viola a regra de não expor segredo e amplia o impacto de qualquer vazamento de dados.
-- *Guardar o segredo apenas em `$env` (sem tabela):* rejeitado — não escala para múltiplos provedores e mistura dado de runtime com configuração; manteríamos só a chave de cifra em `$env`.
+- *Guardar o segredo apenas em `$env` (sem tabela):* rejeitado — não escala para múltiplos provedores e mistura dado de runtime com configuração; mantém-se só a chave de cifra em `$env`.
 
-**Pontos que precisam de aprovação explícita antes do Apply (ver "Decisões de segurança para aprovação"):**
-1. Confirmar o uso de `security.encrypt`/`decrypt` com `key`/`iv` em `$env` do Xano como mecanismo de proteção do segredo (vs. outra abordagem que o grupo prefira).
-2. Confirmar o modelo de credencial para o MVP: **chave de acesso AWS somente leitura** (`access_key_id` + `secret_access_key`). (A `docs/domain-model.md` exige apenas "somente as permissões necessárias"; a escolha entre chave de acesso IAM e, no futuro, IAM Role/AssumeRole é uma decisão de domínio.)
-3. Confirmar que as variáveis de ambiente de cifra serão criadas **no Xano** (não no `.env` do frontend, nem no Git).
+**Pré-requisitos aprovados (confirmados pelo usuário):**
+1. Mecanismo de proteção = cifra no backend com chave em `$env.PROV_ENC_KEY`, **sem IV fixo global** (AEAD/JWE preferencial; senão IV aleatório por gravação em `aws_secret_iv`).
+2. Modelo de credencial do MVP = **chave de acesso AWS** (`access_key_id` + `secret_access_key`) de uma **credencial IAM dedicada**, **nunca root**, com **privilégio mínimo/somente leitura**. IAM Role/AssumeRole com credenciais temporárias fica como evolução futura, fora desta change.
+3. A chave de cifra é criada **no Xano** (`$env.PROV_ENC_KEY`), nunca no `.env` do frontend nem no Git.
 
 ### D5 — Teste de conexão AWS (proposto)
 
@@ -130,10 +144,14 @@ O endpoint `POST /provedores/{id}/testar-conexao` executa, no backend:
 4. Interpreta o resultado: HTTP 200 → credencial válida (`status = ok`); erro de autenticação/assinatura ou falha → `status = erro`.
 5. Grava o `status` via `db.edit` e retorna `{id, status, conectado, mensagem}` — sem segredo. A falha é sempre reportada (não silenciosa).
 
-**Risco técnico a validar no Apply:** a assinatura AWS SigV4 em XanoScript pode exigir cálculo de HMAC-SHA256 encadeado. Alternativas se SigV4 manual se mostrar inviável no Xano:
-- usar uma Lambda/função AWS intermediária acionada por `api.request` (mantém o segredo no backend); ou
-- usar um conector/integração AWS do Xano, se disponível no workspace.
-Esta decisão de implementação é registrada aqui e confirmada na etapa de Apply (ponto aberto Q2); não altera o contrato de API nem as specs.
+**Semântica aprovada de `status = ok`:** nesta change, `ok` significa **"credencial AWS autenticada com sucesso"** (a chamada STS `GetCallerIdentity` confirma que a chave é válida). Isso **não** afirma que todas as permissões futuras do CostGuard (Cost Explorer, listagem de recursos, tags) estão disponíveis. A validação específica dessas permissões ocorrerá na change responsável pela importação AWS, fora do escopo desta.
+
+**Decisão confirmada no Apply (opção 1, aprovada pelo usuário):** **SigV4 manual** para STS `GetCallerIdentity`, implementado diretamente no endpoint `testar_conexao_provedor_POST.xs`. O Xano não possui conector STS nativo (apenas `cloud.aws.s3.*`, específico de S3), e optou-se por não introduzir bucket S3 nem Lambda/infra externa. Os primitivos necessários existem no XanoScript: `hmac_sha256:"key":true` (saída binária raw), `sha256`, `bin2hex`, `base64_encode`. Diretrizes de implementação:
+- Escopo mínimo: assinar **somente** `GET https://sts.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15` (`service = sts`, `region = us-east-1`, host global). Sem abstração genérica; lógica isolada e legível para refatoração futura na integração AWS.
+- Passos SigV4: (1) canonical request (método, URI, query, headers canônicos `host`+`x-amz-date`, signed headers, hash SHA-256 do payload vazio); (2) string to sign com escopo `<data>/us-east-1/sts/aws4_request`; (3) signing key derivada em 4 HMAC-SHA256 encadeados (`AWS4<secret>` → data → region → service → `aws4_request`), tudo em binário via `hmac_sha256:...:true`; (4) assinatura `hmac_sha256` sobre a string to sign, em hex (`bin2hex`); (5) header `Authorization: AWS4-HMAC-SHA256 Credential=.../SignedHeaders=.../Signature=...`.
+- Segurança: o secret é decifrado (`jwe_decode`) **imediatamente antes** da assinatura, só em memória; nunca é logado, nunca retornado; não logar Access Key ID e secret juntos; nenhum material de assinatura volta ao frontend.
+- Resultado: HTTP 200 do STS → `status = ok` ("credencial AWS autenticada com sucesso"); qualquer falha → `status = erro` com mensagem sanitizada. **Verificação real (E2E) fica pendente até o push e teste contra a AWS** — a implementação é marcada como concluída e a validação ao vivo como pendente.
+Não altera o contrato de API nem as specs.
 
 ### D6 — Integração Reflex (proposto)
 
@@ -149,15 +167,18 @@ Novo `projetoImpacta/pages/provedores_state.py` espelhando `projetos_state.py`:
 ## Risks / Trade-offs
 
 - **SigV4 em XanoScript pode ser complexo** → mitigação: fallback para Lambda/conector AWS (D5); confirmado no Apply. Não afeta specs/contrato.
-- **Chave de cifra única para todos os provedores** (`$env`) → se a chave vazar, todos os segredos ficam expostos. Mitigação: chave somente no Xano, fora de Git/frontend; rotação futura fora do escopo deste MVP.
+- **Chave de cifra única para todos os provedores** (`$env.PROV_ENC_KEY`) → se a chave vazar, todos os segredos ficam expostos. Mitigação: chave somente no Xano, fora de Git/frontend; IV aleatório por gravação (ou AEAD/JWE) limita a correlação entre ciphertexts mesmo com a mesma chave; rotação de chave futura fora do escopo deste MVP.
+- **IV/nonce** → reutilizar IV com a mesma chave é inseguro. Mitigação (D4, aprovada): AEAD/JWE com nonce gerenciado, ou IV aleatório por gravação em `aws_secret_iv`; nunca IV fixo global.
 - **`identificador_conta` sem unicidade** → pode haver provedores duplicados apontando para a mesma conta. Mitigação: aceitável no MVP; unicidade pode ser adicionada depois (Q1).
-- **Credencial IAM estática** (vs. role temporária) → trade-off de simplicidade do MVP acadêmico; a exigência de domínio ("somente permissões necessárias") é atendida por uma policy read-only. Decisão em D4.2.
+- **Credencial IAM estática** (vs. role temporária) → trade-off de simplicidade do MVP acadêmico; atendida por uma credencial IAM **dedicada** (nunca root) com policy **somente leitura**. IAM Role/AssumeRole fica como evolução futura (D4.2).
+- **`status = ok` não garante permissões de importação** → `ok` significa apenas credencial autenticada (STS). Mitigação: semântica documentada em D5 e na spec; validação de Cost Explorer/recursos fica para a change de importação AWS.
 
 ## Migration Plan
 
-- Mudança aditiva: nova tabela e novos endpoints no api_group `app` já existente; nenhuma alteração em `usuarios`/`projetos`/autenticação. Rollback = remover a tabela/endpoints e reverter a página `/provedores` ao mock. Variáveis de ambiente de cifra criadas no Xano antes do primeiro cadastro real.
+- Mudança aditiva: nova tabela e novos endpoints no api_group `app` já existente; nenhuma alteração em `usuarios`/`projetos`/autenticação. Rollback = remover a tabela/endpoints e reverter a página `/provedores` ao mock. Variável de cifra (`$env.PROV_ENC_KEY`) criada no Xano antes do primeiro cadastro real.
 
 ## Open Questions
 
 - **Q1 — Unicidade de `identificador_conta`:** impor unicidade por conta AWS, ou permitir múltiplos provedores para a mesma conta? Não bloqueia o contrato; decidível depois. Proposta atual: sem unicidade no MVP.
-- **Q2 — Mecanismo da chamada AWS no teste de conexão:** SigV4 nativo em XanoScript vs. Lambda/conector intermediário. Não altera specs nem contrato de API; confirmado na implementação (Apply) conforme o que o workspace Xano suportar.
+- **Q2 — Mecanismo da chamada AWS no teste de conexão:** RESOLVIDO (opção 1) — SigV4 manual para STS `GetCallerIdentity`, sem bucket S3 nem Lambda. Verificação E2E pendente até o push/teste contra a AWS.
+- **Q3 — Mecanismo exato de cifra:** RESOLVIDO — JWE (`jwe_encode`/`jwe_decode`, `A256KW` + `A256CBC-HS512`, chave em `$env.PROV_ENC_KEY`, nonce gerenciado pelo JWE). `aws_secret_iv` permanece no schema mas não é usado neste caminho.

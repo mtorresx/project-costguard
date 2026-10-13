@@ -4,7 +4,7 @@ Rotas:
 - /login     : página pública de login (único público).
 - /          : home autenticada (área principal).
 - /projetos  : projetos (apresentação/mock).
-- /provedores: provedores (apresentação/mock).
+- /provedores: provedores (dados reais do Xano).
 - /alertas   : alertas (apresentação/mock).
 - /usuarios  : usuários (apresentação/mock).
 
@@ -24,6 +24,7 @@ from .pages.login import login_page
 from .pages.projetos import projetos_page
 from .pages.projetos_state import ProjetosState
 from .pages.provedores import provedores_page
+from .pages.provedores_state import ProvedoresState
 from .pages.usuarios import usuarios_page
 from .state import AuthState
 
@@ -42,6 +43,11 @@ app.add_page(
     title="Projetos — CostGuard",
     on_load=[AuthState.require_auth, ProjetosState.carregar],
 )
-app.add_page(provedores_page, route="/provedores", title="Provedores — CostGuard", on_load=AuthState.require_auth)
+app.add_page(
+    provedores_page,
+    route="/provedores",
+    title="Provedores — CostGuard",
+    on_load=[AuthState.require_auth, ProvedoresState.carregar],
+)
 app.add_page(alertas_page, route="/alertas", title="Alertas — CostGuard", on_load=AuthState.require_auth)
 app.add_page(usuarios_page, route="/usuarios", title="Usuários — CostGuard", on_load=AuthState.require_auth)

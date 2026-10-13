@@ -5,10 +5,10 @@ A página `/provedores` do CostGuard foi incorporada na change `interface-fronte
 ## What Changes
 
 - **Backend Xano (novo)**: tabela `provedores` e os endpoints de Provedores no api_group `app` já existente — listar, detalhe, criar, editar, desativar e testar conexão.
-- **Suporte inicial a AWS**: nesta fase o único `tipo` suportado é `aws`. A credencial é uma chave de acesso AWS **somente leitura** (`access_key_id` + `secret_access_key`).
-- **Segredo nunca exposto**: o `secret_access_key` é armazenado de forma cifrada no backend (chave de cifra em variável de ambiente do Xano, nunca no código/Git) e **nunca** é retornado ao frontend em nenhum endpoint. Após salvo, o segredo não é reexibido; para trocá-lo o admin reenvia um novo valor.
+- **Suporte inicial a AWS**: nesta fase o único `tipo` suportado é `aws`. A credencial é uma chave de acesso de uma credencial IAM **dedicada** (nunca root), com privilégio **mínimo/somente leitura** (`access_key_id` + `secret_access_key`).
+- **Segredo nunca exposto**: o `secret_access_key` é armazenado de forma cifrada e autenticada no backend (chave de cifra em `$env.PROV_ENC_KEY` do Xano, nunca no código/Git; **sem IV fixo global** — IV/nonce aleatório por gravação ou AEAD/JWE) e **nunca** é retornado ao frontend em nenhum endpoint. Após salvo, o segredo não é reexibido; para trocá-lo o admin reenvia um novo valor.
 - **Autorização no backend**: todas as rotas exigem autenticação; as operações de escrita (criar/editar/desativar/testar) exigem `role = admin`; leitura (listar/detalhe) é permitida a qualquer usuário autenticado. O usuário `leitura` nunca cria nem altera provedores.
-- **Teste de conexão não silencioso**: o backend chama a AWS (STS `GetCallerIdentity`, somente leitura) usando a credencial salva, atualiza o `status` do provedor (`ok` quando a conexão é válida, `erro` quando falha) e retorna o resultado. Falha de conexão nunca é silenciosa.
+- **Teste de conexão não silencioso**: o backend chama a AWS (STS `GetCallerIdentity`, somente leitura) usando a credencial salva, atualiza o `status` do provedor (`ok` = credencial AWS autenticada com sucesso, `erro` quando falha) e retorna o resultado. `ok` não afirma que as permissões futuras do CostGuard (Cost Explorer/recursos) foram validadas — isso fica para a change de importação AWS. Falha de conexão nunca é silenciosa.
 - **Desativação lógica**: provedor é desativado via `status`, sem exclusão física.
 - **Frontend Reflex**: substituir os dados mock de `/provedores` por dados reais do Xano — listar provedores; cadastrar/configurar e testar conexão para admin; exibir o status da conexão; usuário `leitura` apenas consulta. A credencial secreta salva nunca é reapresentada. Preserva o design incorporado, o `AuthState`, a sessão e o tratamento central de 401 existentes.
 
@@ -27,7 +27,7 @@ A página `/provedores` do CostGuard foi incorporada na change `interface-fronte
 - **Backend Xano (novo — escopo desta change)**:
   - `xano/table/provedores.xs` — tabela de provedores.
   - `xano/api/app/listar_provedores_GET.xs`, `detalhe_provedor_GET.xs`, `criar_provedor_POST.xs`, `editar_provedor_PATCH.xs`, `desativar_provedor_POST.xs`, `testar_conexao_provedor_POST.xs` — rotas no api_group `app` já existente.
-  - Variáveis de ambiente do Xano para a chave/IV de cifra do segredo (não versionadas).
+  - Variável de ambiente do Xano para a chave de cifra do segredo (`PROV_ENC_KEY`, não versionada). Sem IV fixo global: o IV/nonce é aleatório por gravação (armazenado em campo privado) ou gerenciado pelo mecanismo AEAD/JWE.
 - **Frontend Reflex (escopo desta change)**:
   - `projetoImpacta/pages/provedores.py` — passa a consumir o Xano, com controles de escrita e teste de conexão condicionados a `AuthState.is_admin`.
   - Novo estado dedicado da página (ex.: `projetoImpacta/pages/provedores_state.py`) seguindo o padrão de `ProjetosState`/`AuthState` (envio de token, reação a 401).
