@@ -64,7 +64,18 @@ def _acoes_admin(p: Provedor) -> rx.Component:
 
 def _linha(p: Provedor) -> rx.Component:
     return rx.table.row(
-        rx.table.cell(p["apelido"], color=t.TEXT_HIGH),
+        rx.table.cell(
+            rx.hstack(
+                rx.text(p["apelido"], color=t.TEXT_HIGH),
+                rx.cond(
+                    p["usar_mock"],
+                    pill("Mock", t.TEXT_MED, "rgba(148,163,184,0.1)", "rgba(148,163,184,0.3)"),
+                    rx.fragment(),
+                ),
+                spacing="2",
+                align="center",
+            ),
+        ),
         rx.table.cell(rx.text("AWS", text_transform="uppercase"), color=t.TEXT_MED),
         rx.table.cell(p["identificador_conta"], color=t.TEXT_MED, font_family="monospace"),
         rx.table.cell(_status_pill(p["status"])),
@@ -104,6 +115,13 @@ def _form_modal() -> rx.Component:
                     ProvedoresState.form_identificador_conta,
                     ProvedoresState.set_form_identificador_conta,
                     "123456789012",
+                ),
+                rx.checkbox(
+                    "Usar ambiente AWS Mock",
+                    checked=ProvedoresState.form_usar_mock,
+                    on_change=ProvedoresState.set_form_usar_mock,
+                    color_scheme="teal",
+                    size="2",
                 ),
                 _campo(
                     "AWS Access Key ID",

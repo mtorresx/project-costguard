@@ -121,12 +121,15 @@ Concentrar os custos relacionados a uma iniciativa e compará-los com seu orçam
 - orçamento mensal;
 - status.
 
-O código do projeto é utilizado na convenção de tags dos recursos cloud.
+O código do projeto é utilizado na convenção de tags dos recursos cloud. A tag é um par
+Key/Value em que a Key identifica a finalidade (Key recomendada `PRJ`) e o Value é diretamente
+o código do projeto.
 
 Exemplo conceitual:
 
 ```text
-PRJ_PAGAMENTOS
+Key   = PRJ
+Value = PAGAMENTOS
 ```
 
 onde `PAGAMENTOS` representa o código do projeto.
@@ -234,6 +237,41 @@ Fornecer ao sistema informações sobre recursos, custos e tags necessárias par
 - falhas de importação não podem ocorrer silenciosamente;
 - o provedor deve poder ser identificado como estando em estado normal ou com problema de integração.
 
+## Ambiente de teste: AWS Mock (opcional)
+
+Para fins de desenvolvimento e teste, um provedor AWS pode ser marcado com a característica
+`usar_mock` (booleano, default `false`). Isso NÃO cria um novo tipo de provedor: o provedor
+continua sendo do tipo AWS.
+
+- `usar_mock = false` (padrão): o provedor usa exclusivamente a AWS real (STS no teste de
+  conexão, Cost Explorer real na coleta). Este é o comportamento histórico e não depende do
+  ambiente Mock de forma alguma.
+- `usar_mock = true`: as chamadas ao Cost Explorer do provedor são direcionadas ao AWS Mock
+  Simulator, em `{MOCK_BASE_URL}/aws/{identificador_conta}/ce/`, onde `MOCK_BASE_URL` é uma
+  variável de ambiente existente **apenas no backend** (nunca exposta ao frontend) e
+  `{identificador_conta}` é o Account ID do próprio provedor.
+
+Regras e características:
+
+- **Múltiplas contas**: pode haver N provedores Mock, cada um com seu próprio apelido, Account
+  ID, Access Key e Secret. Não existe Account ID global nem credenciais Mock embutidas no
+  código; os nomes de laboratório (ex.: AWS-DEV, AWS-PROD) são apenas dados de teste e podem
+  mudar quando o ambiente Mock é regenerado.
+- **Credenciais fictícias**: contas Mock devem usar SOMENTE as credenciais fictícias geradas
+  pelo AWS Mock Simulator. O Secret é cifrado pelo mesmo mecanismo JWE da AWS real, nunca
+  retornado por API e decifrado apenas em memória. Credenciais AWS reais nunca são enviadas ao
+  Mock, e credenciais Mock nunca são usadas em endpoints AWS reais.
+- **Assinatura SigV4**: a mesma implementação de SigV4 é usada nos dois casos; apenas o host, o
+  canonical URI e a URL de destino mudam conforme o destino efetivo (AWS real ou Mock), para
+  que a assinatura seja tecnicamente coerente.
+- **Teste de conexão**: com `usar_mock = true`, o teste NÃO chama STS; faz uma chamada
+  `GetTags` (TagKey `PRJ`) ao Cost Explorer do Mock. Ele valida comunicação HTTPS, endpoint,
+  Account ID, contrato do Cost Explorer e a geração/envio do fluxo SigV4 pelo CostGuard — mas
+  **não** comprova que Access Key/Secret estejam corretas, pois o Mock atualmente não valida
+  SigV4. Uma lista de Tags vazia é considerada conexão válida.
+- **Isolamento**: indisponibilidade, erro ou remoção do Mock não afeta provedores reais. O
+  caminho `usar_mock = false` não lê nem depende de `MOCK_BASE_URL`.
+
 ---
 
 # 7. Recurso Cloud
@@ -324,32 +362,30 @@ Não deve existir uma classificação manual paralela no CostGuard capaz de subs
 
 As tags são utilizadas para determinar automaticamente o projeto e a equipe responsáveis por um recurso.
 
+Cada tag é um par Key/Value: a **Key** identifica a finalidade da tag e o **Value** é diretamente o código do projeto ou da equipe. A Key é configurável por provedor; os valores recomendados pelo CostGuard são `PRJ` (projeto) e `EQP` (equipe).
+
 ## Tag de projeto
 
-Utiliza o prefixo:
-
-```text
-PRJ_
-```
+Key recomendada `PRJ`; o Value é o código do projeto.
 
 Exemplo:
 
 ```text
-PRJ_PAGAMENTOS
+Key   = PRJ
+Value = PAGAMENTOS
 ```
+
+No AWS Cost Explorer (agrupamento por tag) esse par aparece como `PRJ$PAGAMENTOS`, do qual se extrai o código `PAGAMENTOS`.
 
 ## Tag de equipe
 
-Utiliza o prefixo:
-
-```text
-EQP_
-```
+Key recomendada `EQP`; o Value é o código da equipe.
 
 Exemplo:
 
 ```text
-EQP_BACKEND
+Key   = EQP
+Value = BACKEND
 ```
 
 ## Regras

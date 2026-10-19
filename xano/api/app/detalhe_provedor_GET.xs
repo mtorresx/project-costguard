@@ -27,6 +27,8 @@ query "provedores/{id}" verb=GET {
         tipo               : $provedor.tipo
         identificador_conta: $provedor.identificador_conta
         tipo_credencial    : $provedor.tipo_credencial
+        tag_alocacao_projeto: $provedor.tag_alocacao_projeto
+        usar_mock          : $provedor.usar_mock
         status             : $provedor.status
       }
     }

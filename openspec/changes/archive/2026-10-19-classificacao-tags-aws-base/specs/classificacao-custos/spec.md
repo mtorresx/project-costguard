@@ -1,9 +1,10 @@
 ## Purpose
 
 Coleta e persistência de custos AWS atribuídos a projetos do CostGuard a partir da
-convenção de tag `PRJ_<codigo>`. Consulta o AWS Cost Explorer (`GetCostAndUsage`)
-agrupado por uma tag de alocação de custo, de forma read-only e idempotente, relaciona
-o valor da tag ao `projetos.codigo`, persiste o custo por projeto/dia/serviço sem alterar
+convenção em que a Tag Key identifica a finalidade (recomendada `PRJ`) e o Tag Value é
+diretamente o `projetos.codigo`. Consulta o AWS Cost Explorer (`GetCostAndUsage`)
+agrupado por essa tag de alocação de custo, de forma read-only e idempotente, relaciona
+o Value da tag ao `projetos.codigo`, persiste o custo por projeto/dia/serviço sem alterar
 a tabela `custos` base, trata de modo não silencioso os casos de borda (custo sem tag,
 tag sem projeto correspondente, projeto inativo, tag de alocação inativa) e registra o
 estado de cada execução, com autorização validada no backend Xano e sem jamais expor
@@ -11,25 +12,33 @@ segredos.
 
 ## ADDED Requirements
 
-### Requirement: Convenção de tag de projeto PRJ_<codigo>
+### Requirement: Convenção de tag de projeto (Key = finalidade, Value = codigo)
 
-O sistema SHALL relacionar os custos AWS aos projetos pela convenção em que o valor de tag
-`PRJ_<codigo>` corresponde ao projeto cujo `projetos.codigo` é `<codigo>` (ex.: valor de
-tag `PRJ_PAGAMENTOS` ↔ `projetos.codigo = PAGAMENTOS`). O prefixo `PRJ_` SHALL ser fixo e,
-na correspondência, o sistema SHALL remover o prefixo e comparar o restante com `codigo`
-de forma case-insensitive, considerando que `projetos.codigo` é normalizado em maiúsculas.
-Um valor de tag que não comece com o prefixo `PRJ_` MUST NOT ser interpretado como tag de
-projeto. O sistema MUST NOT alterar silenciosamente esta convenção.
+O sistema SHALL relacionar os custos AWS aos projetos pela convenção em que a **Tag Key**
+(`provedores.tag_alocacao_projeto`, Key recomendada `PRJ`) identifica a finalidade da tag e o
+**Tag Value** é diretamente o `projetos.codigo` (ex.: Key `PRJ`, Value `PAGAMENTOS` ↔
+`projetos.codigo = PAGAMENTOS`). Na resposta do Cost Explorer agrupada por tag, o grupo vem no
+formato `"<Key>$<Value>"` (ex.: `PRJ$PAGAMENTOS`); o sistema SHALL obter o Value removendo
+exatamente o prefixo `"<Key>$"` e SHALL comparar o Value diretamente com `projetos.codigo` de
+forma case-insensitive (considerando que `projetos.codigo` é normalizado em maiúsculas). O
+sistema MUST NOT exigir, verificar ou remover qualquer prefixo (como `PRJ_`) dentro do Value.
+O sistema MUST NOT fazer hardcode da Key `PRJ`: a Key é a configurada no provedor. O sistema
+MUST NOT alterar silenciosamente esta convenção.
 
-#### Scenario: Valor de tag corresponde a projeto existente
+#### Scenario: Value corresponde a projeto existente
 
-- **WHEN** a classificação encontra o valor de tag `PRJ_PAGAMENTOS` e existe um projeto com `codigo = PAGAMENTOS`
+- **WHEN** a Key configurada é `PRJ` e a classificação encontra o grupo `PRJ$PAGAMENTOS` e existe um projeto com `codigo = PAGAMENTOS`
 - **THEN** o custo correspondente é atribuído a esse projeto
 
-#### Scenario: Valor de tag sem o prefixo PRJ_ não é tag de projeto
+#### Scenario: Convenção de Key configurável (não hardcoded)
 
-- **WHEN** a classificação encontra um valor de tag que não começa com `PRJ_`
-- **THEN** o custo não é atribuído a nenhum projeto por essa tag e é tratado como custo sem tag de projeto
+- **WHEN** a Key configurada é `Project` e a classificação encontra o grupo `Project$PAGAMENTOS` e existe um projeto com `codigo = PAGAMENTOS`
+- **THEN** o custo é atribuído a esse projeto, pois o Value `PAGAMENTOS` é comparado diretamente com `projetos.codigo`
+
+#### Scenario: Value vazio não é tag de projeto
+
+- **WHEN** a classificação encontra um grupo cujo Value (após remover `"<Key>$"`) está vazio
+- **THEN** o custo não é atribuído a nenhum projeto por essa tag e é tratado como custo não alocado
 
 ### Requirement: Entidade Custo por projeto
 
@@ -106,9 +115,10 @@ O sistema SHALL obter os custos por projeto chamando o AWS Cost Explorer (`GetCo
 autenticado com AWS SigV4, usando a credencial do provedor decifrada apenas no backend, com
 granularidade `DAILY`, métrica `UnblendedCost` e `GroupBy` incluindo `{ Type: "TAG", Key:
 <tag de alocação do provedor> }`. A consulta SHALL ser read-only. O sistema SHALL mapear a
-resposta de forma que o valor da tag de cada grupo (ex.: `PRJ_PAGAMENTOS`) determine o
-projeto correspondente, e o serviço, a data, o valor, a moeda e o indicador `estimado` sejam
-derivados da resposta. O sistema MUST NOT ativar ou desativar cost allocation tags.
+resposta de forma que o Value da tag de cada grupo (ex.: `PAGAMENTOS` em `PRJ$PAGAMENTOS`)
+determine o projeto correspondente, e o serviço, a data, o valor, a moeda e o indicador
+`estimado` sejam derivados da resposta. O sistema MUST NOT ativar ou desativar cost
+allocation tags.
 
 #### Scenario: Classificação diária agrupada por tag
 
@@ -178,28 +188,28 @@ ontem, com `Start = hoje (UTC) − 30 dias` e `End = hoje (UTC)`.
 
 ### Requirement: Tratamento de custo sem tag de projeto
 
-O sistema MUST NOT descartar custos que não possuam uma tag de projeto `PRJ_` válida. Os
-custos cujo grupo de tag esteja ausente, vazio, ou não corresponda à convenção `PRJ_` SHALL
-ser classificados como **não alocados** a projeto, de forma rastreável no resultado da
-execução (ex.: contagem/total de não alocados), permanecendo disponíveis na coleta base
-`custos`. Esta capability MUST NOT atribuir esse custo a nenhum projeto.
+O sistema MUST NOT descartar custos cujo Value da tag de alocação esteja ausente ou vazio. Os
+custos cujo grupo de tag não possua Value (ex.: `PRJ$`) SHALL ser classificados como **não
+alocados** a projeto, de forma rastreável no resultado da execução (ex.: contagem/total de não
+alocados), permanecendo disponíveis na coleta base `custos`. Esta capability MUST NOT atribuir
+esse custo a nenhum projeto.
 
-#### Scenario: Custo sem tag de projeto é tratado como não alocado
+#### Scenario: Custo sem Value de tag é tratado como não alocado
 
-- **WHEN** a AWS retorna um grupo cujo valor de tag está ausente, vazio ou não segue a convenção `PRJ_`
+- **WHEN** a AWS retorna um grupo cujo Value da tag de alocação está ausente ou vazio (ex.: `PRJ$`)
 - **THEN** o custo não é atribuído a nenhum projeto e é contabilizado como não alocado no resultado da execução, sem ser descartado
 
-### Requirement: Tratamento de tag PRJ_ sem projeto correspondente
+### Requirement: Tratamento de Value sem projeto correspondente
 
 O sistema MUST NOT criar projetos automaticamente a partir de tags. Quando a AWS retornar um
-valor de tag `PRJ_<codigo>` para o qual não exista projeto com `codigo = <codigo>` no
-CostGuard, o sistema MUST NOT persistir custo por projeto para essa tag e SHALL contabilizar
-a ocorrência de forma rastreável no resultado da execução (ex.: lista de códigos sem projeto
-correspondente), sem falhar a execução por esse motivo.
+Value para o qual não exista projeto com `codigo = <Value>` no CostGuard, o sistema MUST NOT
+persistir custo por projeto para essa tag e SHALL contabilizar a ocorrência de forma rastreável
+no resultado da execução (ex.: contagem de Values sem projeto correspondente), sem falhar a
+execução por esse motivo.
 
-#### Scenario: Tag PRJ_ sem projeto correspondente não cria projeto
+#### Scenario: Value sem projeto correspondente não cria projeto
 
-- **WHEN** a AWS retorna o valor de tag `PRJ_LEGADO` e não existe projeto com `codigo = LEGADO`
+- **WHEN** a AWS retorna o grupo `PRJ$LEGADO` e não existe projeto com `codigo = LEGADO`
 - **THEN** nenhum projeto é criado, nenhum custo por projeto é persistido para `LEGADO`, e a ocorrência é registrada de forma rastreável no resultado
 
 ### Requirement: Tratamento de projeto inativo

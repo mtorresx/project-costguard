@@ -35,60 +35,48 @@ Key=Value. `GroupBy` com `Type=TAG` exige uma **Key** específica (ex.: `Key=Env
 
 ## Decisions
 
-### D1 — Interpretação de `PRJ_<codigo>`: tag VALUE sob uma Key padronizada (DECISÃO CONFIRMADA)
+### D1 — Convenção de tag: Key = finalidade, Value = `codigo` (DECISÃO CONFIRMADA)
 
-**Decisão confirmada pelo usuário:** `PRJ_<codigo>` é um tag **Value**, nunca uma tag **Key**.
-A Key é única/padronizada por provedor e configurável em `provedores.tag_alocacao_projeto`.
+**Decisão confirmada pelo usuário (convenção oficial):** a tag de alocação de projeto é um
+par Key/Value em que a **Key identifica a finalidade da tag** e o **Value é diretamente o
+`projetos.codigo`**. Não há prefixo embutido no Value.
 
-- `Key`  = `provedores.tag_alocacao_projeto` (ex.: `Projeto`).
-- `Value` = `PRJ_<codigo>` (ex.: `PRJ_PAGAMENTOS`).
-- Correspondência: `projetos.codigo = PAGAMENTOS` → valor AWS esperado = `PRJ_PAGAMENTOS`.
-- Somente valores iniciados por `PRJ_` são candidatos à associação com projetos; remover o
-  prefixo `PRJ_` do Value resulta no `projetos.codigo` correspondente.
-- O `GroupBy` do Cost Explorer usa essa Tag **Key** (`tag_alocacao_projeto`).
+- `Key`  = `provedores.tag_alocacao_projeto` (Key padrão/recomendada do CostGuard = `PRJ`).
+- `Value` = `projetos.codigo` (ex.: `PAGAMENTOS`).
+- Correspondência: `provedores.tag_alocacao_projeto = PRJ` e `projetos.codigo = PAGAMENTOS`
+  → tag AWS `PRJ = PAGAMENTOS`.
+- No Cost Explorer, `GroupBy {Type: TAG, Key}` retorna o grupo com `Keys[0] = "PRJ$PAGAMENTOS"`
+  (formato `"<Key>$<Value>"`). O código extrai `PAGAMENTOS` removendo exatamente o prefixo
+  `"<tag_alocacao_projeto>$"` e compara diretamente com `projetos.codigo`.
+- O `GroupBy` usa essa Tag **Key** (`tag_alocacao_projeto`).
 
-**Pergunta crítica de domínio (origem da decisão):** `PRJ_PAGAMENTOS` é uma tag **Key**
-(`Key = PRJ_PAGAMENTOS`, Value = qualquer) ou um tag **Value** (`Key = <chave padronizada>`,
-`Value = PRJ_PAGAMENTOS`)? Confirmado como tag **Value**.
+**Genérico, não hardcoded:** `PRJ` é apenas a Key recomendada. O algoritmo MUST NOT fazer
+hardcode de `PRJ`, MUST NOT exigir prefixo `PRJ_` no Value e MUST NOT remover `PRJ_` do Value.
+Um cliente com outra convenção (ex.: `tag_alocacao_projeto = Project`) funciona sem alteração
+de código: `Project$PAGAMENTOS` → `PAGAMENTOS`.
 
-**O que a documentação do projeto diz (inequívoco quanto ao prefixo/código, ambíguo quanto a
-key vs value):**
-
-- `docs/domain-model.md` (seção 8): a tag de projeto "utiliza o prefixo `PRJ_`", exemplo
-  `PRJ_PAGAMENTOS`.
-- `openspec/specs/projetos/spec.md`: "`codigo` SHALL representar apenas a parte variável da
-  tag de projeto (ex.: tag `PRJ_PAGAMENTOS` → `codigo` = `PAGAMENTOS`)".
-
-Ambos descrevem `PRJ_<codigo>` como o conteúdo de **uma** tag com prefixo fixo, mas nenhum
-afirma se esse conteúdo é a Key ou o Value no modelo AWS.
-
-**Interpretação adotada (proposta): `PRJ_<codigo>` é um tag VALUE.**
-
-- `Key`  = uma chave padronizada de alocação de custo configurada por provedor
-  (`provedores.tag_alocacao_projeto`, ex.: `Projeto`).
-- `Value` = `PRJ_<codigo>` (ex.: `PRJ_PAGAMENTOS`).
+**Convenção anterior (substituída):** inicialmente havia-se adotado Key padronizada (ex.:
+`Projeto`) com Value `PRJ_<codigo>` (ex.: `PRJ_PAGAMENTOS`), exigindo `starts_with "PRJ_"` e
+remoção do prefixo. Essa convenção foi **substituída** pela convenção oficial acima; nenhuma
+referência a `PRJ_<codigo>` como Value permanece válida.
 
 **Justificativa:**
 
-- O Cost Explorer agrupa custos por uma única Key via `GroupBy {Type: TAG, Key}`. Com a
-  interpretação Value, **uma** consulta agrupada retorna todos os projetos de uma vez
-  (um grupo por Value), eficiente e com paginação única.
-- A alternativa (Key = `PRJ_<codigo>`) exigiria uma Key AWS distinta por projeto, portanto
-  N consultas/filtros (uma por projeto) e N cost allocation tags ativadas, cada uma cobrada;
-  não escala e contraria "privilégio mínimo/custo mínimo".
-- O prefixo `PRJ_` continua coerente: ele distingue, dentro de uma mesma Key, valores de
-  projeto (`PRJ_`) de futuros valores de equipe (`EQP_`), permitindo evoluir sem nova Key.
+- O Cost Explorer agrupa por uma única Key via `GroupBy {Type: TAG, Key}`. Uma consulta
+  agrupada retorna todos os projetos de uma vez (um grupo por Value), eficiente e com
+  paginação única.
+- Com o Value sendo diretamente o `codigo`, a correspondência é uma comparação direta com
+  `projetos.codigo`, sem parsing de prefixo — mais simples e sem acoplamento a `PRJ`.
+- A finalidade da tag passa a ser carregada pela **Key** (`PRJ` para projeto; futuramente
+  `EQP` para equipe), não por um prefixo no Value.
 
-**Impacto técnico de cada alternativa:**
-
-- Value (adotada): 1 consulta `GroupBy TAG` por período; mapeamento `Value → codigo`
-  removendo o prefixo `PRJ_`; 1 cost allocation tag Key ativada. Simples e barato.
-- Key: N consultas ou N filtros `Filter.Tags {Key: PRJ_<codigo>}`; N tags ativadas; mais
-  chamadas cobradas; gerência de ativação por projeto. Mais caro e frágil.
+**Equipes (fora de escopo, apenas conceitual):** a convenção futura para equipes será Key
+`EQP`, Value = código da equipe (ex.: `EQP = BACKEND`). Esta change NÃO implementa
+classificação de equipes.
 
 **Esta decisão NÃO deve ser alterada silenciosamente.** Está confirmada pelo usuário e toda a
-modelagem (entidade `custos_projeto`, estratégia de consulta em D4 e tasks) assume a
-interpretação Value.
+modelagem (entidade `custos_projeto`, estratégia de consulta em D4 e tasks) assume esta
+convenção. Afeta também o contrato de `projetos` (ver delta de `projetos`).
 
 ### D2 — Nova tabela `custos_projeto`, sem alterar `custos`
 
@@ -141,11 +129,15 @@ Reaproveitar o endpoint base como molde e criar
 5. Assinar SigV4 e paginar por `NextPageToken`, acumulando todas as páginas em memória
    (sem persistir — igual ao base).
 6. Normalizar: para cada `ResultsByTime` (dia + `Estimated`) e cada `Groups`:
-   - `Keys[0]` = valor da tag (ex.: `PRJ_PAGAMENTOS` ou vazio/`""` quando sem tag);
+   - `Keys[0]` = `"<tag_alocacao_projeto>$<Value>"` (ex.: `PRJ$PAGAMENTOS`; ou `PRJ$`
+     quando o recurso não tem valor para a tag);
    - `Keys[1]` = serviço;
    - valor/moeda de `UnblendedCost`.
-7. Resolver projeto: se `Keys[0]` começa com `PRJ_`, extrair `codigo` (remover prefixo,
-   comparar case-insensitive com `projetos.codigo`, que é `upper`). Buscar projeto ativo.
+7. Resolver projeto: remover exatamente o prefixo `"<tag_alocacao_projeto>$"` de `Keys[0]`
+   para obter o Value. Se o Value for vazio ⇒ não alocado. Caso contrário, o Value é
+   diretamente o `codigo` (normalizar para maiúsculas, coerente com `projetos.codigo` que é
+   `upper`) e comparar diretamente com `projetos.codigo`. Buscar projeto ativo. NÃO há
+   tratamento de prefixo `PRJ_` no Value.
 8. Upsert em `custos_projeto` apenas para custos cujo projeto existe e está `ativo`;
    contabilizar os casos de borda (não alocado, tag sem projeto, projeto inativo) em
    contadores do resultado.
@@ -165,8 +157,8 @@ falha de página ⇒ nada gravado, estado `erro` sanitizado, dados anteriores in
 
 Espelhar `coletas_custo`, acrescentando os contadores de borda. Campos propostos:
 `id`, `provedor_id`, `intervalo_inicio`, `intervalo_fim`, `status` (`sucesso`/`erro`),
-`registros_gravados`, `nao_alocados` (contagem/registro de custo sem `PRJ_`),
-`tags_sem_projeto` (ex.: lista/contagem de códigos sem projeto), `projetos_inativos`
+`registros_gravados`, `nao_alocados` (contagem de custo cujo Value da tag está ausente/vazio),
+`tags_sem_projeto` (ex.: contagem de Values sem projeto correspondente), `projetos_inativos`
 (ignorados), `mensagem` (sanitizada), `executado_em`. Usar tabela separada mantém a
 semântica de `coletas_custo` (coleta base) intacta.
 
@@ -185,9 +177,10 @@ Em nenhum caso o CostGuard ativa a tag (restrição de escopo e de segurança).
 
 ## Risks / Trade-offs
 
-- **Dependência da convenção key vs value (D1)** → Resolvido: decisão confirmada como tag
-  Value sob a Key `tag_alocacao_projeto`. Mitigação residual: a Key correta precisa estar
-  configurada no provedor (validada antes de chamar a AWS) e ativada como cost allocation tag.
+- **Dependência da convenção de tag (D1)** → Resolvido: Key = finalidade
+  (`tag_alocacao_projeto`, recomendada `PRJ`), Value = `projetos.codigo` diretamente.
+  Mitigação residual: a Key correta precisa estar configurada no provedor (validada antes de
+  chamar a AWS) e ativada como cost allocation tag.
 - **Tag de alocação não ativada ⇒ grupos vazios** → Mitigação: D7 (inferência + opcional
   `ListCostAllocationTags`), erro sanitizado não silencioso, sem modificar a AWS.
 - **Latência de propagação (até ~24h após ativar a tag)** → Mitigação: documentado como
@@ -215,7 +208,7 @@ permissão de escrita e não ativa cost allocation tags.
 
 ## Open Questions
 
-- Não há decisão bloqueante. D1 (key vs value) está resolvida: tag Value sob a Key
-  `tag_alocacao_projeto`. A única questão deferível para a implementação, sem impacto nas
-  specs nem na modelagem, é a via de detecção de tag inativa (D7): inferir pela resposta
-  vazia ou confirmar explicitamente via `ce:ListCostAllocationTags`.
+- Não há decisão bloqueante. D1 está resolvida: Key = finalidade (`tag_alocacao_projeto`,
+  recomendada `PRJ`), Value = `projetos.codigo` diretamente. A única questão deferível para a
+  implementação, sem impacto nas specs nem na modelagem, é a via de detecção de tag inativa
+  (D7): inferir pela resposta vazia ou confirmar explicitamente via `ce:ListCostAllocationTags`.
