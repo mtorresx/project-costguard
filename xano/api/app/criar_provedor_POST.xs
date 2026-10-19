@@ -10,6 +10,11 @@ query provedores verb=POST {
     text aws_secret_access_key {
       sensitive = true
     }
+    // AWS Tag Key da cost allocation tag (ex.: "Projeto"). Opcional, não é segredo.
+    text tag_alocacao_projeto? filters=trim
+    // Característica opcional: usar o AWS Mock Simulator em vez da AWS real.
+    // Opcional; default false. Não é segredo.
+    bool usar_mock?
   }
 
   stack {
@@ -71,6 +76,8 @@ query provedores verb=POST {
         tipo_credencial    : "aws_access_key"
         aws_access_key_id  : $input.aws_access_key_id
         aws_secret_cifrado : $segredo_cifrado
+        tag_alocacao_projeto: ($input.tag_alocacao_projeto != null && $input.tag_alocacao_projeto != "") ? $input.tag_alocacao_projeto : null
+        usar_mock          : ($input.usar_mock != null) ? $input.usar_mock : false
         status             : "pendente"
       }
     } as $novo_provedor
@@ -83,6 +90,8 @@ query provedores verb=POST {
         tipo               : $novo_provedor.tipo
         identificador_conta: $novo_provedor.identificador_conta
         tipo_credencial    : $novo_provedor.tipo_credencial
+        tag_alocacao_projeto: $novo_provedor.tag_alocacao_projeto
+        usar_mock          : $novo_provedor.usar_mock
         status             : $novo_provedor.status
       }
     }

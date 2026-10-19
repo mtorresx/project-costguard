@@ -29,6 +29,7 @@ class Provedor(TypedDict):
     identificador_conta: str
     tipo_credencial: str
     status: str
+    usar_mock: bool
 
 
 def _normalizar(bruto: dict) -> Provedor:
@@ -39,6 +40,8 @@ def _normalizar(bruto: dict) -> Provedor:
         "identificador_conta": bruto.get("identificador_conta") or "",
         "tipo_credencial": bruto.get("tipo_credencial") or "aws_access_key",
         "status": bruto.get("status") or "pendente",
+        # Metadado (não é segredo). Default False preserva o fluxo AWS real.
+        "usar_mock": bool(bruto.get("usar_mock") or False),
     }
 
 
@@ -61,6 +64,8 @@ class ProvedoresState(rx.State):
     form_access_key_id: str = ""
     # Segredo: só preenchido pelo usuário para submissão; nunca vem do backend.
     form_secret_access_key: str = ""
+    # Característica opcional "Usar ambiente AWS Mock" (default desmarcado).
+    form_usar_mock: bool = False
     form_error: str = ""
     form_loading: bool = False
 
@@ -114,6 +119,8 @@ class ProvedoresState(rx.State):
         self.form_identificador_conta = ""
         self.form_access_key_id = ""
         self.form_secret_access_key = ""
+        # Checkbox começa desmarcado na criação (default AWS real).
+        self.form_usar_mock = False
         self.form_error = ""
         self.form_aberto = True
 
@@ -127,6 +134,8 @@ class ProvedoresState(rx.State):
         self.form_access_key_id = ""
         # O segredo salvo nunca é devolvido pelo backend: o campo começa vazio.
         self.form_secret_access_key = ""
+        # Reflete o valor salvo (metadado, não é segredo).
+        self.form_usar_mock = bool(provedor.get("usar_mock") or False)
         self.form_error = ""
         self.form_aberto = True
 
@@ -154,6 +163,11 @@ class ProvedoresState(rx.State):
     @rx.event
     def set_form_secret_access_key(self, v: str):
         self.form_secret_access_key = v
+        self.form_error = ""
+
+    @rx.event
+    def set_form_usar_mock(self, v: bool):
+        self.form_usar_mock = bool(v)
         self.form_error = ""
 
     @rx.event
@@ -192,12 +206,14 @@ class ProvedoresState(rx.State):
                         "identificador_conta": self.form_identificador_conta.strip(),
                         "aws_access_key_id": self.form_access_key_id.strip(),
                         "aws_secret_access_key": self.form_secret_access_key,
+                        "usar_mock": self.form_usar_mock,
                     }
                     resp = await client.post(f"{base}/provedores", json=payload, headers=headers)
                 else:
                     payload = {
                         "apelido": self.form_apelido.strip(),
                         "identificador_conta": self.form_identificador_conta.strip(),
+                        "usar_mock": self.form_usar_mock,
                     }
                     # Só envia o Access Key ID se o admin informou um novo valor
                     # (vazio = preservar o existente no backend).

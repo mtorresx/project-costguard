@@ -71,6 +71,58 @@ query "provedores/{id}/coletar-custos" verb=POST {
     }
 
     // ============================================================
+    // B.1) Resolução do destino (AWS real x AWS Mock) e dos componentes da
+    //      assinatura dependentes do destino. UMA única implementação SigV4:
+    //      apenas host, canonical URI e URL mudam conforme usar_mock.
+    //      usar_mock=false NÃO lê nem depende de MOCK_BASE_URL.
+    // ============================================================
+    var $eh_mock { value = ($provedor.usar_mock == true) }
+
+    // Defaults = AWS real (comportamento atual, inalterado).
+    var $sig_host { value = "ce.us-east-1.amazonaws.com" }
+    var $canonical_uri { value = "/" }
+    var $sig_endpoint { value = "https://ce.us-east-1.amazonaws.com/" }
+
+    conditional {
+      if ($eh_mock == true) {
+        // MOCK_BASE_URL é obrigatória apenas no caminho Mock.
+        precondition ($env.MOCK_BASE_URL != null && $env.MOCK_BASE_URL != "") {
+          error_type = "inputerror"
+          error = "Ambiente Mock não configurado (MOCK_BASE_URL ausente)"
+        }
+        // Normaliza removendo UMA barra final (se houver) para evitar barra dupla
+        // (//aws/...). Sem regex: compara o último caractere via substr.
+        var $mock_base_raw { value = $env.MOCK_BASE_URL }
+        var $mock_base_len { value = $mock_base_raw|strlen }
+        var $mock_base_ultimo { value = $mock_base_raw|substr:($mock_base_len - 1) }
+        var $mock_base_norm { value = $mock_base_raw }
+        conditional {
+          if ($mock_base_ultimo == "/") {
+            var.update $mock_base_norm { value = $mock_base_raw|substr:0:($mock_base_len - 1) }
+          }
+        }
+        // Host derivado da base (sem esquema) para assinatura e header Host.
+        // Sem regex: remove o prefixo de esquema conhecido via substr.
+        var $mock_host { value = $mock_base_norm }
+        conditional {
+          if ($mock_base_norm|starts_with:"https://") {
+            var.update $mock_host { value = $mock_base_norm|substr:8 }
+          }
+          else {
+            conditional {
+              if ($mock_base_norm|starts_with:"http://") {
+                var.update $mock_host { value = $mock_base_norm|substr:7 }
+              }
+            }
+          }
+        }
+        var.update $sig_host { value = $mock_host }
+        var.update $canonical_uri { value = "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
+        var.update $sig_endpoint { value = $mock_base_norm ~ "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
+      }
+    }
+
+    // ============================================================
     // C) Resolve o intervalo. Start inclusivo, End exclusivo.
     //    Aritmética feita no timestamp NUMÉRICO; só então formata YYYY-MM-DD.
     // ============================================================
@@ -92,10 +144,9 @@ query "provedores/{id}/coletar-custos" verb=POST {
     }
 
     // Constantes SigV4 do Cost Explorer (service=ce, region=us-east-1).
+    // $sig_host, $canonical_uri e $sig_endpoint já resolvidos em B.1 (real x mock).
     var $sig_service { value = "ce" }
     var $sig_region  { value = "us-east-1" }
-    var $sig_host    { value = "ce.us-east-1.amazonaws.com" }
-    var $sig_endpoint { value = "https://ce.us-east-1.amazonaws.com/" }
     var $amz_target  { value = "AWSInsightsIndexService.GetCostAndUsage" }
     var $content_type { value = "application/x-amz-json-1.1" }
 
@@ -125,7 +176,7 @@ query "provedores/{id}/coletar-custos" verb=POST {
     }
     var $signed_headers { value = "content-type;host;x-amz-date;x-amz-target" }
     var $canonical_request {
-      value = "POST" ~ "\n" ~ "/" ~ "\n" ~ "" ~ "\n" ~ $canonical_headers ~ "\n" ~ $signed_headers ~ "\n" ~ $payload_hash
+      value = "POST" ~ "\n" ~ $canonical_uri ~ "\n" ~ "" ~ "\n" ~ $canonical_headers ~ "\n" ~ $signed_headers ~ "\n" ~ $payload_hash
     }
 
     var $credential_scope {
@@ -211,7 +262,7 @@ query "provedores/{id}/coletar-custos" verb=POST {
         }
         var $signed_headers_pag { value = "content-type;host;x-amz-date;x-amz-target" }
         var $canonical_request_pag {
-          value = "POST" ~ "\n" ~ "/" ~ "\n" ~ "" ~ "\n" ~ $canonical_headers_pag ~ "\n" ~ $signed_headers_pag ~ "\n" ~ $payload_hash_pag
+          value = "POST" ~ "\n" ~ $canonical_uri ~ "\n" ~ "" ~ "\n" ~ $canonical_headers_pag ~ "\n" ~ $signed_headers_pag ~ "\n" ~ $payload_hash_pag
         }
 
         var $credential_scope_pag {

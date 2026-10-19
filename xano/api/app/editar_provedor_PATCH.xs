@@ -13,6 +13,11 @@ query "provedores/{id}" verb=PATCH {
     text aws_secret_access_key? {
       sensitive = true
     }
+    // AWS Tag Key da cost allocation tag (ex.: "Projeto"). Opcional, não é segredo.
+    text tag_alocacao_projeto? filters=trim
+    // Característica opcional: usar o AWS Mock Simulator em vez da AWS real.
+    // Opcional; quando omitido, preserva o valor atual. Não é segredo.
+    bool usar_mock?
   }
 
   stack {
@@ -67,6 +72,8 @@ query "provedores/{id}" verb=PATCH {
         identificador_conta: ($input.identificador_conta != null) ? $input.identificador_conta : $provedor_alvo.identificador_conta
         aws_access_key_id  : ($input.aws_access_key_id != null) ? $input.aws_access_key_id : $provedor_alvo.aws_access_key_id
         aws_secret_cifrado : $segredo_cifrado
+        tag_alocacao_projeto: ($input.tag_alocacao_projeto != null) ? $input.tag_alocacao_projeto : $provedor_alvo.tag_alocacao_projeto
+        usar_mock          : ($input.usar_mock != null) ? $input.usar_mock : $provedor_alvo.usar_mock
       }
     } as $provedor_atualizado
 
@@ -78,6 +85,8 @@ query "provedores/{id}" verb=PATCH {
         tipo               : $provedor_atualizado.tipo
         identificador_conta: $provedor_atualizado.identificador_conta
         tipo_credencial    : $provedor_atualizado.tipo_credencial
+        tag_alocacao_projeto: $provedor_atualizado.tag_alocacao_projeto
+        usar_mock          : $provedor_atualizado.usar_mock
         status             : $provedor_atualizado.status
       }
     }

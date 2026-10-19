@@ -28,6 +28,14 @@ table provedores {
     enum status?=pendente {
       values = ["pendente", "ok", "erro", "inativo"]
     }
+    // AWS Tag Key da cost allocation tag usada no GroupBy do Cost Explorer
+    // (ex.: "Projeto"). Não é segredo. Opcional: sem ela a classificação
+    // de custos por projeto não pode ser executada.
+    text tag_alocacao_projeto? filters=trim
+    // Característica opcional: quando true, as chamadas ao Cost Explorer deste
+    // provedor usam o AWS Mock Simulator ({MOCK_BASE_URL}/aws/{conta}/ce/) em vez
+    // do endpoint AWS real. Default false preserva o fluxo AWS real. Não é segredo.
+    bool usar_mock?=false
     timestamp criado_em?=now {
       visibility = "private"
     }
