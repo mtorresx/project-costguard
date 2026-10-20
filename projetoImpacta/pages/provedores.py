@@ -13,6 +13,7 @@ from ..components.layout import app_shell
 from ..components.pill import pill
 from ..components.tabela import th
 from ..state import AuthState
+from .descoberta_state import DescobertaState, ProjetoDescoberto
 from .provedores_state import Provedor, ProvedoresState
 
 
@@ -37,6 +38,18 @@ def _acoes_admin(p: Provedor) -> rx.Component:
             variant="soft",
             color_scheme="teal",
             size="1",
+        ),
+        rx.cond(
+            p["tipo"] == "aws",
+            rx.button(
+                rx.icon("search", size=14),
+                "Descobrir projetos",
+                on_click=DescobertaState.abrir(p),
+                variant="soft",
+                color_scheme="teal",
+                size="1",
+            ),
+            rx.fragment(),
         ),
         rx.button(
             rx.icon("pencil", size=14),
@@ -182,6 +195,146 @@ def _form_modal() -> rx.Component:
     )
 
 
+def _linha_descoberto(d: ProjetoDescoberto) -> rx.Component:
+    return rx.hstack(
+        rx.cond(
+            d["existente"],
+            # Existente: sem checkbox, apenas um espaço reservado para alinhar.
+            rx.box(width="20px", height="20px"),
+            rx.checkbox(
+                checked=DescobertaState.selecionados.contains(d["codigo"]),
+                on_change=DescobertaState.toggle_codigo(d["codigo"]),
+                color_scheme="teal",
+            ),
+        ),
+        rx.text(d["codigo"], color=t.TEXT_HIGH, font_family="monospace", size="2"),
+        rx.spacer(),
+        rx.cond(
+            d["existente"],
+            pill("Já existe", t.TEXT_MED, "rgba(148,163,184,0.1)", "rgba(148,163,184,0.3)"),
+            pill("Novo", t.PRIMARY_ACCENT, "rgba(20,184,166,0.12)", "rgba(20,184,166,0.35)"),
+        ),
+        align="center",
+        width="100%",
+        padding_y="8px",
+        padding_x="10px",
+        border_bottom=f"1px solid {t.BORDER_SUBTLE}",
+        spacing="3",
+    )
+
+
+def _descoberta_corpo() -> rx.Component:
+    return rx.cond(
+        DescobertaState.loading_descoberta,
+        rx.center(rx.spinner(size="3"), padding_y="8"),
+        rx.cond(
+            DescobertaState.descobertos.length() > 0,
+            rx.vstack(
+                rx.hstack(
+                    rx.text(
+                        "Tag Key: ",
+                        rx.text.span(DescobertaState.tag_key, font_family="monospace", color=t.TEXT_HIGH),
+                        size="1",
+                        color=t.TEXT_MED,
+                    ),
+                    rx.spacer(),
+                    rx.cond(
+                        DescobertaState.tem_novos,
+                        rx.button(
+                            "Selecionar todos os novos",
+                            on_click=DescobertaState.selecionar_todos_novos,
+                            variant="ghost",
+                            color_scheme="teal",
+                            size="1",
+                            disabled=DescobertaState.todos_novos_selecionados,
+                        ),
+                        rx.fragment(),
+                    ),
+                    width="100%",
+                    align="center",
+                ),
+                rx.box(
+                    rx.foreach(DescobertaState.descobertos, _linha_descoberto),
+                    width="100%",
+                    max_height="320px",
+                    overflow_y="auto",
+                    border=f"1px solid {t.BORDER_SUBTLE}",
+                    border_radius="10px",
+                ),
+                spacing="2",
+                width="100%",
+            ),
+            rx.center(
+                rx.text("Nenhum projeto descoberto para este provedor.", color=t.TEXT_MED, size="2"),
+                padding_y="8",
+            ),
+        ),
+    )
+
+
+def _descoberta_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.dialog.title(
+                rx.hstack(
+                    rx.text("Descobrir projetos", color=t.TEXT_HIGH),
+                    rx.text.span(DescobertaState.provedor_apelido, color=t.TEXT_MED, size="2"),
+                    spacing="2",
+                    align="baseline",
+                ),
+            ),
+            rx.vstack(
+                rx.text(
+                    "Projetos encontrados nas tags do provedor. Selecione os novos para importar.",
+                    size="1",
+                    color=t.TEXT_MED,
+                ),
+                rx.cond(
+                    DescobertaState.mensagem_sucesso != "",
+                    rx.callout(DescobertaState.mensagem_sucesso, color_scheme="green", size="1", width="100%"),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    DescobertaState.erro != "",
+                    rx.callout(DescobertaState.erro, color_scheme="red", size="1", width="100%"),
+                    rx.fragment(),
+                ),
+                _descoberta_corpo(),
+                rx.hstack(
+                    rx.dialog.close(
+                        rx.button("Fechar", variant="soft", on_click=DescobertaState.fechar),
+                    ),
+                    rx.spacer(),
+                    rx.button(
+                        rx.icon("download", size=14),
+                        rx.cond(
+                            DescobertaState.total_selecionados > 0,
+                            rx.text("Importar selecionados (", DescobertaState.total_selecionados, ")"),
+                            rx.text("Importar selecionados"),
+                        ),
+                        on_click=DescobertaState.importar,
+                        loading=DescobertaState.loading_importacao,
+                        disabled=~DescobertaState.pode_importar,
+                        background=t.PRIMARY,
+                        color=t.ON_PRIMARY,
+                        font_weight="700",
+                        _hover={"background": t.PRIMARY_HOVER},
+                    ),
+                    width="100%",
+                ),
+                spacing="4",
+                width="100%",
+                margin_top="0.5rem",
+            ),
+            background=t.SURFACE_RAISED,
+            border=f"1px solid {t.BORDER_SUBTLE}",
+            color=t.TEXT_MAIN,
+            max_width="560px",
+        ),
+        open=DescobertaState.aberto,
+    )
+
+
 def _conteudo() -> rx.Component:
     return rx.box(
         rx.vstack(
@@ -247,6 +400,7 @@ def _conteudo() -> rx.Component:
                 ),
             ),
             _form_modal(),
+            _descoberta_modal(),
             spacing="6",
             width="100%",
             max_width="1000px",
