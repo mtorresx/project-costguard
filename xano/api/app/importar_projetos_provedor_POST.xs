@@ -136,4 +136,5 @@ query "provedores/{id}/importar-projetos" verb=POST {
   }
 
   response = $resposta
+  guid = "58SFOqtDGSo6_B9zxO8txqhYyQs"
 }

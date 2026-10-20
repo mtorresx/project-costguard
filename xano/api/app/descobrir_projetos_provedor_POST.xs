@@ -329,4 +329,5 @@ query "provedores/{id}/descobrir-projetos" verb=POST {
   }
 
   response = $resposta
+  guid = "UHc2DlFUzr035u0A50SKZIuI4Oo"
 }
