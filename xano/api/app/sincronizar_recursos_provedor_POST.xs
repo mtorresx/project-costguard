@@ -215,20 +215,29 @@ query "provedores/{id}/sincronizar-recursos" verb=POST {
       timeout = 30
     } as $ec2_result
 
-    // Parse das regiões a partir do XML (<regionName>...</regionName>).
+    // Parse das regiões a partir do XML. Determinístico via split:
+    // divide por "<regionName>"; cada fragmento (a partir do 2º) começa com
+    // "<regiao></regionName>..."; pega o trecho antes de "</regionName>".
     var $regioes { value = [] }
     conditional {
       if ($ec2_result.response.status == 200) {
         var $xml_regioes { value = ("" ~ $ec2_result.response.result) }
-        var $matches_reg { value = "/<regionName>([^<]+)<\\/regionName>/"|regex_get_all_matches:$xml_regioes }
-        foreach ($matches_reg) {
-          each as $m {
-            var $rn { value = ($m[1] ?? "") }
+        var $frags { value = $xml_regioes|split:"<regionName>" }
+        var $idx { value = 0 }
+        foreach ($frags) {
+          each as $frag {
             conditional {
-              if ($rn != "") {
-                var.update $regioes { value = $regioes|push:$rn }
+              if ($idx > 0) {
+                var $partes { value = $frag|split:"</regionName>" }
+                var $rn { value = (($partes|first)|trim) }
+                conditional {
+                  if ($rn != "") {
+                    var.update $regioes { value = $regioes|push:$rn }
+                  }
+                }
               }
             }
+            var.update $idx { value = $idx + 1 }
           }
         }
       }
