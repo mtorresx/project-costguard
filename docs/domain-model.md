@@ -355,6 +355,8 @@ Se um recurso estiver associado ao projeto ou equipe incorretos, a correção de
 
 Na próxima importação, o CostGuard deverá reavaliar automaticamente sua classificação.
 
+O inventário de recursos representa a associação **atual** do recurso a projeto e equipe. A reavaliação atualiza essa associação atual, mas não reclassifica custos já ocorridos (ver seção 9).
+
 Não deve existir uma classificação manual paralela no CostGuard capaz de substituir permanentemente as tags da origem.
 
 ---
@@ -424,7 +426,7 @@ Permitir consolidar quanto cada recurso consumiu e, consequentemente, calcular o
 
 - um recurso pode possuir registros de custo;
 - registros de custo são utilizados para calcular o consumo do projeto;
-- o consumo das equipes é derivado dos recursos atribuídos a elas.
+- o consumo das equipes é derivado das tags de equipe que o provedor associa a cada custo no período em que ele ocorreu (no AWS Cost Explorer, a dimensão de tag retornada para cada dia).
 
 ## Regras estruturais
 
@@ -432,6 +434,9 @@ Permitir consolidar quanto cada recurso consumiu e, consequentemente, calcular o
 - a moeda utilizada inicialmente é USD;
 - o custo do mês corrente pode ser atualizado conforme novas importações forem realizadas;
 - o sistema não deve descartar custos apenas porque um recurso está mal classificado.
+
+- o custo histórico nunca é reclassificado usando a equipe atual do inventário: um recurso que hoje pertence a uma equipe pode ter tido seu custo passado atribuído a outra;
+- na AWS real, as Tag Keys de projeto e de equipe precisam estar ativadas como Cost Allocation Tags para aparecerem no Cost Explorer (pré-condição operacional fora do controle do CostGuard).
 
 O detalhamento físico sobre como o histórico de custos e mudanças de classificação serão persistidos deverá ser definido durante as changes correspondentes.
 
