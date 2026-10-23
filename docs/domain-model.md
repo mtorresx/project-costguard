@@ -177,13 +177,16 @@ Permitir identificar qual grupo dentro de um projeto é responsável pelo consum
 - código;
 - indicação de origem automática ou manual.
 
-O código da equipe é utilizado na convenção de tags.
+O código da equipe é utilizado na convenção de tags. A tag de equipe é um par Key/Value em que a Key identifica a finalidade (Key recomendada `EQP`) e o Value é diretamente o código da equipe.
 
 Exemplo conceitual:
 
 ```text
-EQP_BACKEND
+Key   = EQP
+Value = BACKEND
 ```
+
+onde `BACKEND` representa o código da equipe. No AWS Cost Explorer esse par aparece como `EQP$BACKEND` (representação do Cost Explorer, não o formato da tag gravada no recurso).
 
 ## Relacionamentos
 
@@ -387,6 +390,8 @@ Exemplo:
 Key   = EQP
 Value = BACKEND
 ```
+
+No AWS Cost Explorer (agrupamento por tag) esse par aparece como `EQP$BACKEND`, do qual se extrai o código `BACKEND`. Essa forma `EQP$BACKEND` (assim como `PRJ$PAGAMENTOS`) é a **representação do Cost Explorer**, não o formato da tag gravada no recurso: na nuvem, a tag é sempre o par `Key = EQP` / `Value = BACKEND`.
 
 ## Regras
 

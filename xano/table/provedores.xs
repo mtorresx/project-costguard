@@ -32,10 +32,27 @@ table provedores {
     // (ex.: "Projeto"). Não é segredo. Opcional: sem ela a classificação
     // de custos por projeto não pode ser executada.
     text tag_alocacao_projeto? filters=trim
+    // AWS Tag Key usada para identificar a equipe dona de um recurso no
+    // inventário. Default/recomendado: "EQP". Não é segredo. Provedores novos
+    // nascem com "EQP"; a sincronização também aplica fallback "EQP" para
+    // registros legados null/blank (ver endpoint de sincronização).
+    text tag_alocacao_equipe?=EQP filters=trim
     // Característica opcional: quando true, as chamadas ao Cost Explorer deste
     // provedor usam o AWS Mock Simulator ({MOCK_BASE_URL}/aws/{conta}/ce/) em vez
     // do endpoint AWS real. Default false preserva o fluxo AWS real. Não é segredo.
     bool usar_mock?=false
+    // Proteção best-effort contra duplo disparo da sincronização de recursos.
+    // NÃO é um lock atômico/distribuído (ver design): apenas evita execução
+    // concorrente acidental na operação normal (endpoint admin-only).
+    bool sincronizacao_recursos_em_andamento?=false {
+      visibility = "private"
+    }
+    timestamp sincronizacao_recursos_inicio? {
+      visibility = "private"
+    }
+    text sincronizacao_recursos_id? {
+      visibility = "private"
+    }
     timestamp criado_em?=now {
       visibility = "private"
     }
