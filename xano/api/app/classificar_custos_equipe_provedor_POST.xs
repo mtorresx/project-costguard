@@ -176,6 +176,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     var $falhou { value = false }
     var $limite_paginacao { value = false }
     var $moeda_divergente { value = false }
+    var $falha_normalizacao { value = false }
     var $falha_persistencia { value = false }
     var $ce_result { value = null }
 
@@ -300,6 +301,10 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
     conditional {
       if ($falhou == false) {
+        // Falha em parsing/normalização/agregação/resolução → erro registrado,
+        // sem upserts e sem reconciliação.
+        try_catch {
+          try {
         foreach ($resultados_acc) {
           each as $rbt {
             var $dia { value = $rbt.TimePeriod.Start }
@@ -369,8 +374,10 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
                         conditional {
                           if (($agg|has:$chave_agg) == false) {
-                            var.update $agg {
-                              value = $agg|set:$chave_agg:{
+                            // Objeto montado em variável própria: objetos
+                            // multi-linha não podem ser argumento de filtro.
+                            var $novo_item {
+                              value = {
                                 projeto_id   : $proj.id
                                 codigo_equipe: $codigo_eqp
                                 data         : $dia
@@ -378,6 +385,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 moeda        : $moeda_grupo
                                 estimado     : $estimado
                               }
+                            }
+                            var.update $agg {
+                              value = $agg|set:$chave_agg:$novo_item
                             }
                             var.update $agg_chaves { value = $agg_chaves|push:$chave_agg }
                           }
@@ -389,8 +399,8 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 var.update $moeda_divergente { value = true }
                               }
                               else {
-                                var.update $agg {
-                                  value = $agg|set:$chave_agg:{
+                                var $item_somado {
+                                  value = {
                                     projeto_id   : $item_atual.projeto_id
                                     codigo_equipe: $item_atual.codigo_equipe
                                     data         : $item_atual.data
@@ -398,6 +408,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                     moeda        : $item_atual.moeda
                                     estimado     : $item_atual.estimado || $estimado
                                   }
+                                }
+                                var.update $agg {
+                                  value = $agg|set:$chave_agg:$item_somado
                                 }
                               }
                             }
@@ -409,6 +422,12 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                 }
               }
             }
+          }
+        }
+          }
+          catch {
+            var.update $falhou { value = true }
+            var.update $falha_normalizacao { value = true }
           }
         }
       }
@@ -627,6 +646,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
           }
           elseif ($moeda_divergente == true) {
             var.update $mensagem { value = "Custos com moedas diferentes na mesma chave; agregação não suportada" }
+          }
+          elseif ($falha_normalizacao == true) {
+            var.update $mensagem { value = "Falha ao processar a resposta do AWS Cost Explorer" }
           }
           elseif ($falha_persistencia == true) {
             var.update $mensagem { value = "Falha ao persistir custos por equipe; reexecute a classificação" }

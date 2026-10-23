@@ -108,13 +108,18 @@ query "projetos/{id}/custos-equipe" verb=GET {
         conditional {
           if ($totais|has:$ke) {
             var $total_eq { value = $totais|get:$ke:0 }
-            var.update $lista_equipes {
-              value = $lista_equipes|push:{
+            // Objeto montado em variável própria: objetos multi-linha não
+            // podem ser argumento de filtro.
+            var $item_equipe {
+              value = {
                 equipe_id: $eq.id
                 codigo   : $eq.codigo
                 nome     : $eq.nome
                 total    : $total_eq
               }
+            }
+            var.update $lista_equipes {
+              value = $lista_equipes|push:$item_equipe
             }
             var.update $total_equipes { value = $total_equipes + $total_eq }
             var.update $vistas { value = $vistas|set:$ke:true }
@@ -132,13 +137,16 @@ query "projetos/{id}/custos-equipe" verb=GET {
             conditional {
               if (($vistas|has:$kl) == false) {
                 var $total_orfa { value = $totais|get:$kl:0 }
-                var.update $lista_equipes {
-                  value = $lista_equipes|push:{
+                var $item_orfa {
+                  value = {
                     equipe_id: $l.equipe_id
                     codigo   : $codigos_linha|get:$kl:""
                     nome     : $codigos_linha|get:$kl:""
                     total    : $total_orfa
                   }
+                }
+                var.update $lista_equipes {
+                  value = $lista_equipes|push:$item_orfa
                 }
                 var.update $total_equipes { value = $total_equipes + $total_orfa }
                 var.update $vistas { value = $vistas|set:$kl:true }
