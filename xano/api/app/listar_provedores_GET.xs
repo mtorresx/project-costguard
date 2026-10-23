@@ -21,6 +21,7 @@ query provedores verb=GET {
         identificador_conta: $$.identificador_conta,
         tipo_credencial    : $$.tipo_credencial,
         tag_alocacao_projeto: $$.tag_alocacao_projeto,
+        tag_alocacao_equipe: $$.tag_alocacao_equipe,
         usar_mock          : $$.usar_mock,
         status             : $$.status
       }
