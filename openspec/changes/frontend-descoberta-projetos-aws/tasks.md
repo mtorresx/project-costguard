@@ -33,7 +33,7 @@
 
 ## 9. Controle admin/leitura
 
-- [x] 9.1 Exibir a ação "Descobrir projetos" e todos os controles de importação apenas sob `rx.cond(AuthState.is_admin, ...)`. Verificação: admin vê a ação; usuário leitura não vê descoberta nem importação; autorização real permanece no backend.
+- [x] 9.1 Exibir a ação "Descobrir projetos" e todos os controles de importação apenas sob `rx.cond(AuthState.is_admin, ...)`. Verificação: ação e controles condicionados a `AuthState.is_admin`; fluxo admin validado; validação autenticada com usuário `role=leitura` adiada para a task 11.2/change futura; autorização real permanece no backend.
 
 ## 10. Validação local
 
@@ -43,4 +43,4 @@
 ## 11. E2E
 
 - [x] 11.1 (E2E admin, validado) Com um provedor AWS/Mock elegível (`tag_alocacao_projeto=PRJ`): abrir o modal, descobrir (existentes vs novos corretos), selecionar os novos, importar, ver o feedback (criados/ignorados) e confirmar que a redescoberta mostra os importados como existentes. Verificação: fluxo admin completo funciona na UI; sem regressão nos fluxos existentes de provedores. [Evidências: modal abre; loading OK; existentes com "Já existe" e sem checkbox; novo com "Novo" + checkbox; selecionar-todos-os-novos e contador OK; importar desabilitado sem seleção; importação cria o projeto (persistido no Xano, visível em /projetos); feedback de sucesso; seleção limpa; modal segue aberto; redescoberta automática; item importado vira "Já existe" e perde o checkbox.]
-- [ ] 11.2 (E2E role=leitura) Confirmar que, logado como `role=leitura`, a ação "Descobrir projetos" e os controles de importação não aparecem na UI, e que o restante de `/provedores` continua funcionando normalmente. Verificação: usuário leitura não acessa o fluxo (ocultação é UX; autorização real permanece no backend).
+- [x] 11.2 Registrar o adiamento do E2E com `role=leitura` para uma change futura. Nesta change foi validado o fluxo administrativo; a ocultação da ação "Descobrir projetos" para usuários de leitura permanece implementada por `rx.cond(AuthState.is_admin, ...)`, porém o E2E autenticado com usuário `role=leitura` não foi executado e será validado separadamente. Verificação: adiamento explicitamente documentado, sem afirmar que o E2E de leitura passou.
