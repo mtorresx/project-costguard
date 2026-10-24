@@ -53,7 +53,9 @@ query "projetos/{id}/custos-equipe" verb=GET {
     foreach ($linhas) {
       each as $l {
         var $moeda_linha { value = $l.moeda }
-        var.update $moedas { value = $moedas|set:$moeda_linha:true }
+        // Chave interna segura; a moeda original segue em $l.moeda.
+        var $moeda_key { value = "k" ~ ($moeda_linha|sha256) }
+        var.update $moedas { value = $moedas|set:$moeda_key:true }
       }
     }
 
@@ -82,7 +84,8 @@ query "projetos/{id}/custos-equipe" verb=GET {
             var.update $total_sem_responsavel { value = $total_sem_responsavel + $l.valor }
           }
           else {
-            var $k { value = $l.equipe_id|to_text }
+            // Chave interna segura do mapa (não exposta nem persistida).
+            var $k { value = "k" ~ (($l.equipe_id|to_text)|sha256) }
             var $acumulado { value = $totais|get:$k:0 }
             var.update $totais { value = $totais|set:$k:($acumulado + $l.valor) }
             var.update $codigos_linha { value = $codigos_linha|set:$k:$l.codigo_equipe }
@@ -104,7 +107,7 @@ query "projetos/{id}/custos-equipe" verb=GET {
 
     foreach ($equipes_projeto) {
       each as $eq {
-        var $ke { value = $eq.id|to_text }
+        var $ke { value = "k" ~ (($eq.id|to_text)|sha256) }
         conditional {
           if ($totais|has:$ke) {
             var $total_eq { value = $totais|get:$ke:0 }
@@ -133,7 +136,7 @@ query "projetos/{id}/custos-equipe" verb=GET {
       each as $l {
         conditional {
           if ($l.equipe_id != null && $l.codigo_equipe != "") {
-            var $kl { value = $l.equipe_id|to_text }
+            var $kl { value = "k" ~ (($l.equipe_id|to_text)|sha256) }
             conditional {
               if (($vistas|has:$kl) == false) {
                 var $total_orfa { value = $totais|get:$kl:0 }

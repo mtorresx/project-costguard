@@ -351,9 +351,12 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                   }
                   else {
                     // Resolve o projeto uma vez por código (cache).
+                    // Chave interna segura do mapa (o codigo_prj real segue na lógica).
+                    var.update $etapa { value = "cache_hash" }
+                    var $cache_prj_key { value = "k" ~ ($codigo_prj|sha256) }
                     var.update $etapa { value = "cache_has" }
                     conditional {
-                      if (($cache_projetos|has:$codigo_prj) == false) {
+                      if (($cache_projetos|has:$cache_prj_key) == false) {
                         var.update $etapa { value = "cache_consulta" }
                         db.query projetos {
                           where = $db.projetos.codigo == $codigo_prj
@@ -370,7 +373,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                               }
                             }
                             var.update $cache_projetos {
-                              value = $cache_projetos|set:$codigo_prj:$cache_item_inexistente
+                              value = $cache_projetos|set:$cache_prj_key:$cache_item_inexistente
                             }
                           }
                           else {
@@ -382,7 +385,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                               }
                             }
                             var.update $cache_projetos {
-                              value = $cache_projetos|set:$codigo_prj:$cache_item_projeto
+                              value = $cache_projetos|set:$cache_prj_key:$cache_item_projeto
                             }
                           }
                         }
@@ -390,7 +393,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                     }
 
                     var.update $etapa { value = "cache_get" }
-                    var $proj { value = $cache_projetos|get:$codigo_prj:null }
+                    var $proj { value = $cache_projetos|get:$cache_prj_key:null }
 
                     var.update $etapa { value = "resolver_projeto" }
                     conditional {
@@ -405,9 +408,12 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                         var.update $etapa { value = "montar_chave_agg" }
                         var $chave_agg { value = ($proj.id|to_text) ~ "|" ~ $codigo_eqp ~ "|" ~ $dia ~ "|unblended" }
 
+                        // Chave interna segura do mapa; a chave lógica acima não muda.
+                        var.update $etapa { value = "agg_hash" }
+                        var $agg_key { value = "k" ~ ($chave_agg|sha256) }
                         var.update $etapa { value = "agg_has" }
                         conditional {
-                          if (($agg|has:$chave_agg) == false) {
+                          if (($agg|has:$agg_key) == false) {
                             // Objeto montado em variável própria: objetos
                             // multi-linha não podem ser argumento de filtro.
                             var.update $etapa { value = "agg_montar_item" }
@@ -423,14 +429,14 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                             }
                             var.update $etapa { value = "agg_set_novo" }
                             var.update $agg {
-                              value = $agg|set:$chave_agg:$novo_item
+                              value = $agg|set:$agg_key:$novo_item
                             }
                             var.update $etapa { value = "agg_push" }
-                            var.update $agg_chaves { value = $agg_chaves|push:$chave_agg }
+                            var.update $agg_chaves { value = $agg_chaves|push:$agg_key }
                           }
                           else {
                             var.update $etapa { value = "agg_get" }
-                            var $item_atual { value = $agg|get:$chave_agg:null }
+                            var $item_atual { value = $agg|get:$agg_key:null }
                             conditional {
                               if ($item_atual.moeda != $moeda_grupo) {
                                 // Nunca somar moedas diferentes: erro controlado.
@@ -450,7 +456,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 }
                                 var.update $etapa { value = "agg_set_soma" }
                                 var.update $agg {
-                                  value = $agg|set:$chave_agg:$item_somado
+                                  value = $agg|set:$agg_key:$item_somado
                                 }
                               }
                             }
@@ -509,10 +515,11 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                   else {
                     var.update $linhas_com_equipe { value = $linhas_com_equipe + 1 }
                     var $chave_eq { value = ($item.projeto_id|to_text) ~ "|" ~ $item.codigo_equipe }
+                    var $chave_eq_key { value = "k" ~ ($chave_eq|sha256) }
 
                     conditional {
-                      if ($cache_equipes|has:$chave_eq) {
-                        var.update $equipe_id_res { value = $cache_equipes|get:$chave_eq:null }
+                      if ($cache_equipes|has:$chave_eq_key) {
+                        var.update $equipe_id_res { value = $cache_equipes|get:$chave_eq_key:null }
                       }
                       else {
                         db.query equipes {
@@ -556,7 +563,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                           }
                         }
 
-                        var.update $cache_equipes { value = $cache_equipes|set:$chave_eq:$equipe_id_res }
+                        var.update $cache_equipes { value = $cache_equipes|set:$chave_eq_key:$equipe_id_res }
                       }
                     }
                   }
@@ -634,7 +641,8 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
             var $ativos { value = {} }
             foreach ($projetos_ativos) {
               each as $pa {
-                var.update $ativos { value = $ativos|set:($pa.id|to_text):true }
+                var $ativo_key { value = "k" ~ (($pa.id|to_text)|sha256) }
+                var.update $ativos { value = $ativos|set:$ativo_key:true }
               }
             }
 
@@ -645,8 +653,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
             foreach ($candidatos) {
               each as $cand {
+                var $cand_key { value = "k" ~ (($cand.projeto_id|to_text)|sha256) }
                 conditional {
-                  if ($ativos|has:($cand.projeto_id|to_text)) {
+                  if ($ativos|has:$cand_key) {
                     db.del custos_equipe {
                       field_name = "id"
                       field_value = $cand.id
