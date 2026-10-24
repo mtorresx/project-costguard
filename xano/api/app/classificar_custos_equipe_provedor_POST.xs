@@ -410,7 +410,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                           if (($agg|has:$chave_agg) == false) {
                             // Objeto montado em variável própria: objetos
                             // multi-linha não podem ser argumento de filtro.
-                            var.update $etapa { value = "agg_set_novo" }
+                            var.update $etapa { value = "agg_montar_item" }
                             var $novo_item {
                               value = {
                                 projeto_id   : $proj.id
@@ -421,6 +421,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 estimado     : $estimado
                               }
                             }
+                            var.update $etapa { value = "agg_set_novo" }
                             var.update $agg {
                               value = $agg|set:$chave_agg:$novo_item
                             }
@@ -436,7 +437,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 var.update $moeda_divergente { value = true }
                               }
                               else {
-                                var.update $etapa { value = "agg_set_soma" }
+                                var.update $etapa { value = "agg_montar_soma" }
                                 var $item_somado {
                                   value = {
                                     projeto_id   : $item_atual.projeto_id
@@ -447,6 +448,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                     estimado     : $item_atual.estimado || $estimado
                                   }
                                 }
+                                var.update $etapa { value = "agg_set_soma" }
                                 var.update $agg {
                                   value = $agg|set:$chave_agg:$item_somado
                                 }
