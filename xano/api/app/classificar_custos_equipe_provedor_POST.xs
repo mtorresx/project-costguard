@@ -298,6 +298,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     // Agregados: chave -> item; $agg_chaves preserva a ordem de inserção.
     var $agg { value = {} }
     var $agg_chaves { value = [] }
+    // DIAGNÓSTICO TEMPORÁRIO (BUG-4): identificador fixo da última operação
+    // iniciada na normalização. Nunca contém dados da AWS nem segredos.
+    var $etapa { value = "" }
 
     conditional {
       if ($falhou == false) {
@@ -312,12 +315,18 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
             foreach (($rbt.Groups ?? [])) {
               each as $grupo {
+                var.update $etapa { value = "inicio_grupo" }
+                var.update $etapa { value = "extrair_prj" }
                 var $chave_prj { value = ($grupo.Keys|first) }
+                var.update $etapa { value = "extrair_eqp" }
                 var $chave_eqp { value = ($grupo.Keys[1] ?? "") }
+                var.update $etapa { value = "extrair_valor" }
                 var $valor_grupo { value = ($grupo.Metrics.UnblendedCost.Amount ?? "0")|to_decimal }
+                var.update $etapa { value = "extrair_moeda" }
                 var $moeda_grupo { value = ($grupo.Metrics.UnblendedCost.Unit ?? "USD") }
 
                 // Remove exatamente "<Key>$", depois trim + upper.
+                var.update $etapa { value = "normalizar_prj" }
                 var $valor_prj { value = "" }
                 conditional {
                   if ($chave_prj != null && ($chave_prj|starts_with:$prefixo_prj)) {
@@ -326,6 +335,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                 }
                 var $codigo_prj { value = ($valor_prj|trim)|to_upper }
 
+                var.update $etapa { value = "normalizar_eqp" }
                 var $valor_eqp { value = "" }
                 conditional {
                   if ($chave_eqp != null && ($chave_eqp|starts_with:$prefixo_eqp)) {
@@ -341,8 +351,10 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                   }
                   else {
                     // Resolve o projeto uma vez por código (cache).
+                    var.update $etapa { value = "cache_has" }
                     conditional {
                       if (($cache_projetos|has:$codigo_prj) == false) {
+                        var.update $etapa { value = "cache_consulta" }
                         db.query projetos {
                           where = $db.projetos.codigo == $codigo_prj
                           return = {type: "single"}
@@ -350,6 +362,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
                         conditional {
                           if ($proj_db == null) {
+                            var.update $etapa { value = "cache_set" }
                             var $cache_item_inexistente {
                               value = {
                                 id    : 0
@@ -361,6 +374,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                             }
                           }
                           else {
+                            var.update $etapa { value = "cache_set" }
                             var $cache_item_projeto {
                               value = {
                                 id    : $proj_db.id
@@ -375,8 +389,10 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                       }
                     }
 
+                    var.update $etapa { value = "cache_get" }
                     var $proj { value = $cache_projetos|get:$codigo_prj:null }
 
+                    var.update $etapa { value = "resolver_projeto" }
                     conditional {
                       if ($proj.status == "inexistente") {
                         var.update $tags_sem_projeto { value = $tags_sem_projeto + 1 }
@@ -386,12 +402,15 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                       }
                       else {
                         // Projeto ativo: agrega por (projeto, equipe, dia, métrica).
+                        var.update $etapa { value = "montar_chave_agg" }
                         var $chave_agg { value = ($proj.id|to_text) ~ "|" ~ $codigo_eqp ~ "|" ~ $dia ~ "|unblended" }
 
+                        var.update $etapa { value = "agg_has" }
                         conditional {
                           if (($agg|has:$chave_agg) == false) {
                             // Objeto montado em variável própria: objetos
                             // multi-linha não podem ser argumento de filtro.
+                            var.update $etapa { value = "agg_set_novo" }
                             var $novo_item {
                               value = {
                                 projeto_id   : $proj.id
@@ -405,9 +424,11 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                             var.update $agg {
                               value = $agg|set:$chave_agg:$novo_item
                             }
+                            var.update $etapa { value = "agg_push" }
                             var.update $agg_chaves { value = $agg_chaves|push:$chave_agg }
                           }
                           else {
+                            var.update $etapa { value = "agg_get" }
                             var $item_atual { value = $agg|get:$chave_agg:null }
                             conditional {
                               if ($item_atual.moeda != $moeda_grupo) {
@@ -415,6 +436,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 var.update $moeda_divergente { value = true }
                               }
                               else {
+                                var.update $etapa { value = "agg_set_soma" }
                                 var $item_somado {
                                   value = {
                                     projeto_id   : $item_atual.projeto_id
@@ -436,6 +458,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                     }
                   }
                 }
+                var.update $etapa { value = "fim_grupo" }
               }
             }
           }
@@ -664,7 +687,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
             var.update $mensagem { value = "Custos com moedas diferentes na mesma chave; agregação não suportada" }
           }
           elseif ($falha_normalizacao == true) {
-            var.update $mensagem { value = "Falha ao processar a resposta do AWS Cost Explorer" }
+            var.update $mensagem { value = "Falha ao processar a resposta do AWS Cost Explorer (etapa: " ~ $etapa ~ ")" }
           }
           elseif ($falha_persistencia == true) {
             var.update $mensagem { value = "Falha ao persistir custos por equipe; reexecute a classificação" }
