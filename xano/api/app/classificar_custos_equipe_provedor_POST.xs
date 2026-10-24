@@ -350,10 +350,26 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
                         conditional {
                           if ($proj_db == null) {
-                            var.update $cache_projetos { value = $cache_projetos|set:$codigo_prj:{id: 0, status: "inexistente"} }
+                            var $cache_item_inexistente {
+                              value = {
+                                id    : 0
+                                status: "inexistente"
+                              }
+                            }
+                            var.update $cache_projetos {
+                              value = $cache_projetos|set:$codigo_prj:$cache_item_inexistente
+                            }
                           }
                           else {
-                            var.update $cache_projetos { value = $cache_projetos|set:$codigo_prj:{id: $proj_db.id, status: $proj_db.status} }
+                            var $cache_item_projeto {
+                              value = {
+                                id    : $proj_db.id
+                                status: $proj_db.status
+                              }
+                            }
+                            var.update $cache_projetos {
+                              value = $cache_projetos|set:$codigo_prj:$cache_item_projeto
+                            }
                           }
                         }
                       }
