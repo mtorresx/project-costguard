@@ -394,18 +394,32 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
                     var.update $etapa { value = "cache_get" }
                     var $proj { value = $cache_projetos|get:$cache_prj_key:null }
+                    var.update $etapa { value = "cache_get_ok" }
 
-                    var.update $etapa { value = "resolver_projeto" }
+                    // DIAGNÓSTICO TEMPORÁRIO (BUG-5): só marca a etapa; não muda o fluxo.
+                    conditional {
+                      if ($proj == null) {
+                        var.update $etapa { value = "resolver_proj_nulo" }
+                      }
+                      else {
+                        var.update $etapa { value = "resolver_status" }
+                      }
+                    }
                     conditional {
                       if ($proj.status == "inexistente") {
+                        var.update $etapa { value = "resolver_inexistente" }
+                        var.update $etapa { value = "resolver_inexistente_contador" }
                         var.update $tags_sem_projeto { value = $tags_sem_projeto + 1 }
                       }
                       elseif ($proj.status != "ativo") {
+                        var.update $etapa { value = "resolver_inativo" }
+                        var.update $etapa { value = "resolver_inativo_contador" }
                         var.update $projetos_inativos { value = $projetos_inativos + 1 }
                       }
                       else {
                         // Projeto ativo: agrega por (projeto, equipe, dia, métrica).
                         var.update $etapa { value = "montar_chave_agg" }
+                        var.update $etapa { value = "resolver_id" }
                         var $chave_agg { value = ($proj.id|to_text) ~ "|" ~ $codigo_eqp ~ "|" ~ $dia ~ "|unblended" }
 
                         // Chave interna segura do mapa; a chave lógica acima não muda.
