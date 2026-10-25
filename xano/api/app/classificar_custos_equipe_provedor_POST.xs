@@ -366,10 +366,15 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                         conditional {
                           if ($proj_db == null) {
                             var.update $etapa { value = "cache_set" }
+                            // Valores intermediários: um objeto só com literais é
+                            // normalizado pelo Xano num bloco de expressão que não
+                            // se comporta como objeto em runtime (BUG-5).
+                            var $id_inexistente { value = 0 }
+                            var $status_inexistente { value = "inexistente" }
                             var $cache_item_inexistente {
                               value = {
-                                id    : 0
-                                status: "inexistente"
+                                id    : $id_inexistente
+                                status: $status_inexistente
                               }
                             }
                             var.update $cache_projetos {
