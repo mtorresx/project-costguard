@@ -19,13 +19,13 @@
 
 ## 3. Carregamento e erros
 
-- [ ] 3.1 Implementar `carregar` com `GET /projetos/{id}` e tratamento de 401 (`AuthState.handle_unauthenticated`), 404 e erro de rede. Parâmetro não inteiro positivo não chama o backend. Verificação: cada caminho mostra o estado esperado. Implementado; verificação em runtime pendente (depende de sessão autenticada, ver 7.x).
-- [ ] 3.2 Implementar a consulta de `custos-equipe` com a janela MTD e tratamento de 401, `inputerror` (mensagem do backend ou genérica) e rede. Verificação: consulta envia `data_inicio` e `data_fim` corretos; erro de moedas mostra mensagem sem valores somados. Implementado; verificação em runtime pendente (ver 7.x).
-- [ ] 3.3 Implementar as consultas de `recursos` e `equipes` com erros independentes do bloco de custos. Verificação: falha em `recursos` não esconde as métricas. Implementado; verificação em runtime pendente (ver 7.x).
+- [ ] 3.1 Implementar `carregar` com `GET /projetos/{id}` e tratamento de 401 (`AuthState.handle_unauthenticated`), 404 e erro de rede. Parâmetro não inteiro positivo não chama o backend. Verificação: cada caminho mostra o estado esperado. Implementado; verificação em runtime pendente (depende de sessão autenticada, ver 7.x). _AUDITORIA 2026-10-26, mantida ABERTA: exercitados e aprovados: sucesso (projeto 4, 1, 10, 6), 404 (/projetos/999999), parâmetro inválido (/projetos/abc, sem chamada ao backend), 401 (token inválido, 7.5). NÃO exercitado: erro de rede. Aguarda decisão do usuário: aceitar como limitação ou executar teste de falha._
+- [ ] 3.2 Implementar a consulta de `custos-equipe` com a janela MTD e tratamento de 401, `inputerror` (mensagem do backend ou genérica) e rede. Verificação: consulta envia `data_inicio` e `data_fim` corretos; erro de moedas mostra mensagem sem valores somados. Implementado; verificação em runtime pendente (ver 7.x). _AUDITORIA 2026-10-26, mantida ABERTA: exercitados: janela MTD enviada (data_inicio e data_fim, America/Sao_Paulo) e totais reais conferidos (7.1). NÃO exercitados: inputerror de moedas diferentes (não há dado com moedas mistas) e erro de rede. Aguarda decisão do usuário._
+- [ ] 3.3 Implementar as consultas de `recursos` e `equipes` com erros independentes do bloco de custos. Verificação: falha em `recursos` não esconde as métricas. Implementado; verificação em runtime pendente (ver 7.x). _AUDITORIA 2026-10-26, mantida ABERTA: exercitado: consulta de recursos e equipes com sucesso (7.1, 9.5). NÃO exercitado: falha isolada de recursos ou equipes com métricas preservadas. Aguarda decisão do usuário._
 
 ## 4. Página e componentes
 
-- [ ] 4.1 Criar `projetoImpacta/pages/projeto_detalhe.py` com `projeto_detalhe_page()`, portando do frontend de referência o cabeçalho, o breadcrumb, `_kpi_card_detalhe`, o bloco de equipes (`_barra_equipe`), o bloco de recursos (`_grupo_recursos`), o aviso de sem responsável e os estados vazios. O primeiro card de métrica usa o rótulo "Custo classificado (MTD)". Preservar estilos e tokens de `theme`. Verificação: página renderiza com dados de teste sem erro, e o rótulo aparece exatamente como especificado. Implementado; verificação visual pendente (ver 7.x).
+- [x] 4.1 Criar `projetoImpacta/pages/projeto_detalhe.py` com `projeto_detalhe_page()`, portando do frontend de referência o cabeçalho, o breadcrumb, `_kpi_card_detalhe`, o bloco de equipes (`_barra_equipe`), o bloco de recursos (`_grupo_recursos`), o aviso de sem responsável e os estados vazios. O primeiro card de métrica usa o rótulo "Custo classificado (MTD)". Preservar estilos e tokens de `theme`. Verificação: página renderiza com dados de teste sem erro, e o rótulo aparece exatamente como especificado. Implementado; verificação visual pendente (ver 7.x). _Evidência (auditoria 2026-10-26): página real renderizada no navegador autenticado (E2E 7.1 e 7.6): breadcrumb, cabeçalho com status, dois cards de métrica com rótulo exato 'Custo classificado (MTD)', custo por equipe, recursos por equipe, aviso sem responsável e botão desabilitado, sem erro de página._
 - [x] 4.6 Mostrar o status do projeto no cabeçalho, com "Ativo" ou "Inativo" (D13), sem bloquear o conteúdo quando inativo. Verificação: projeto com `status = inativo` mostra "Inativo" e o detalhamento continua visível. _Evidência: `_badge_status` usa `status_texto` ('Ativo'/'Inativo') no cabeçalho._
 - [x] 4.2 Ajustar a grade de KPIs para duas colunas, sem terceiro card (D6). Verificação: exatamente dois cards de métrica. _Evidência: grade com `columns="2"` e dois cards de métrica (`_card_custo`, `_card_orcamento`)._
 - [x] 4.3 Remover da tela os blocos de custo por provedor, projeção, variação e coluna de valor por recurso. Verificação: nenhum desses textos ou colunas aparece na página. _Evidência: grep na página não encontra projeção, tendência nem custo por provedor; coluna de valor removida da tabela de recursos._
@@ -53,8 +53,8 @@
 
 ## 8. Relatório e entrega
 
-- [ ] 8.1 Registrar os comandos executados, saídas relevantes e resultado de cada etapa de validação. Verificação: relatório anexado ao fim do Apply, com o que não foi executado e o motivo. Parcial: validações executadas listadas na resposta; E2E pendente.
-- [ ] 8.2 Informar ao usuário os arquivos alterados e o `git add` sugerido, sem executar Git. Verificação: lista de arquivos de staging entregue para o usuário executar.
+- [x] 8.1 Registrar os comandos executados, saídas relevantes e resultado de cada etapa de validação. Verificação: relatório anexado ao fim do Apply, com o que não foi executado e o motivo. Parcial: validações executadas listadas na resposta; E2E pendente. _Evidência (auditoria 2026-10-26): relatório de validação anexado na seção 10 deste arquivo: comandos executados, resultados e o que não foi executado com o motivo._
+- [x] 8.2 Informar ao usuário os arquivos alterados e o `git add` sugerido, sem executar Git. Verificação: lista de arquivos de staging entregue para o usuário executar. _Evidência (auditoria 2026-10-26): arquivos alterados e git add sugerido informados na resposta desta auditoria; Git não executado pelo agente._
 
 ## 9. Correção de equipe_id 0 (E2E)
 
@@ -64,6 +64,35 @@
 - [x] 9.4 Callout "Recursos sem responsável" considera equipe 0/ausente com tag vazia e informa a quantidade real; custo sem responsável MTD aparece como informação adicional, sem associação por recurso. _Evidência: E2E projeto 4 mostra o callout com 5 recursos._
 - [x] 9.5 E2E projeto 4 e projeto 6 com a conta admin E2E. _Evidência: ambos PASS; CSV com agrupamento igual à tela._
 - [x] 9.6 Spec e design atualizados para as regras aprovadas. _Evidência: `openspec validate` válido, 12 requirements e 37 scenarios._
-- [ ] 9.7 Limitação registrada (fora desta change): inconsistência de backend com recursos ativos `equipe_id = 0` e tag preenchida, a investigar. Registrada no design como R8. Backend não alterado.
-- [ ] 9.8 Follow-up registrado (fora desta change): `AuthState.require_auth` trata 429 de `/me` como sessão expirada. Registrado no design como R9. `AuthState` não alterado.
-- [ ] 9.9 FOLLOW-UP FORA DESTA CHANGE: `PATCH /projetos/{id}` responde HTTP 200 ao receber `budget = 0`, mas não persiste o valor zero. Evidência: `PATCH /projetos/4` com `{"budget": 0}` retornou 200 e `GET /projetos/4` seguiu com `budget = 1000` em três leituras. Não diagnosticado nesta change. Backend não alterado. Restauração feita pela Metadata API (ver 7.1).
+- [x] 9.7 Limitação registrada (fora desta change): inconsistência de backend com recursos ativos `equipe_id = 0` e tag preenchida, a investigar. Registrada no design como R8. Backend não alterado. _Evidência (auditoria 2026-10-26): limitação registrada no design (R8) e no E2E (9.5): recursos com equipe_id = 0 e tag preenchida, a investigar no backend. Backend não alterado._
+- [x] 9.8 Follow-up registrado (fora desta change): `AuthState.require_auth` trata 429 de `/me` como sessão expirada. Registrado no design como R9. `AuthState` não alterado. _Evidência (auditoria 2026-10-26): follow-up registrado no design (R9): AuthState.require_auth trata 429 de /me como sessão expirada. AuthState não alterado, fora desta change._
+- [x] 9.9 FOLLOW-UP FORA DESTA CHANGE: `PATCH /projetos/{id}` responde HTTP 200 ao receber `budget = 0`, mas não persiste o valor zero. Evidência: `PATCH /projetos/4` com `{"budget": 0}` retornou 200 e `GET /projetos/4` seguiu com `budget = 1000` em três leituras. Não diagnosticado nesta change. Backend não alterado. Restauração feita pela Metadata API (ver 7.1). _Evidência (auditoria 2026-10-26): follow-up registrado (texto preservado): PATCH /projetos/{id} responde 200 com budget = 0 e não persiste o zero. Não diagnosticado nesta change, backend não alterado._
+
+## 10. Relatório de validação (auditoria 2026-10-26)
+
+Comandos e resultados registrados durante o Apply e o E2E:
+
+- `py_compile` em `projeto_detalhe.py`, `projeto_detalhe_state.py`, `projetos.py` e `projetoImpacta.py`: OK.
+- `reflex compile --dry` (Reflex 0.9.12): compilou com sucesso.
+- `openspec validate frontend-detalhamento-projeto --strict`: válido. 12 requirements e 37 scenarios.
+- Checagens de regra da janela MTD, moeda, orçamento, nome do ARN e agrupamento (script fora do repositório): passaram.
+- Servidor de produção local subido e encerrado em cada rodada de E2E.
+- E2E autenticado admin: projetos 4, 6, 10, 1 e inativo 6; navegação, valores, CSV, grupos e callout conferidos contra a API para a mesma janela MTD (7.1, 7.2, 7.3, 7.4, 9.5).
+- Orçamento temporário de 1000 no projeto 4 para o cenário com custo: restante, percentual e barra conferidos. Restaurado para 0 pela Metadata API (7.1).
+- Acesso sem sessão a `/projetos/4`: redirecionamento para `/login`, sem dados visíveis, sem loop e sem erro (7.5).
+- E2E com role leitura: login, /projetos, /projetos/4, somente leitura observada (7.6). Usuário restaurado para inativo; login bloqueado confirmado.
+
+Não executado, com o motivo:
+
+- Comparação visual autenticada com `C:rontend-costguard`: a referência usa outra base Xano e endpoint `/detalhe` inexistente, sem login possível.
+- Teste de erro de rede e de falha isolada de recursos (3.1, 3.2, 3.3): não exercitados nesta change. Aguardam decisão.
+- Teste de `inputerror` de moedas diferentes (3.2): não há dado com moedas mistas no ambiente.
+- Lint: o repositório não tem configuração de lint.
+- Testes automatizados no repositório: o repositório não tem infraestrutura de testes. Os scripts de checagem ficaram fora do repositório.
+- Arquivamento: não realizado, conforme combinado.
+
+Follow-ups fora desta change (preservados, não corrigidos):
+
+- R8 / 9.7: recursos com `equipe_id = 0` e tag preenchida no backend.
+- R9 / 9.8: `AuthState.require_auth` trata 429 como sessão expirada.
+- 9.9: `PATCH /projetos/{id}` responde 200 com `budget = 0` e não persiste o zero.
