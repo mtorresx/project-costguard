@@ -51,7 +51,7 @@ def _card(projeto: Projeto) -> rx.Component:
                     rx.button(
                         rx.icon("pencil", size=14),
                         "Editar",
-                        on_click=ProjetosState.abrir_editar(projeto),
+                        on_click=ProjetosState.abrir_editar(projeto).stop_propagation,
                         variant="soft",
                         color_scheme="gray",
                         size="1",
@@ -61,7 +61,7 @@ def _card(projeto: Projeto) -> rx.Component:
                         rx.button(
                             rx.icon("ban", size=14),
                             "Desativar",
-                            on_click=ProjetosState.desativar(projeto["id"]),
+                            on_click=ProjetosState.desativar(projeto["id"]).stop_propagation,
                             variant="soft",
                             color_scheme="red",
                             size="1",
@@ -73,6 +73,15 @@ def _card(projeto: Projeto) -> rx.Component:
                 ),
                 rx.fragment(),
             ),
+            rx.hstack(
+                rx.text("Ver detalhamento", font_size="12px", color=t.TEXT_MED),
+                rx.icon("arrow-right", size=13, color=t.TEXT_MED),
+                spacing="1",
+                align="center",
+                justify="end",
+                width="100%",
+                margin_top="12px",
+            ),
             align="start",
             width="100%",
         ),
@@ -80,6 +89,10 @@ def _card(projeto: Projeto) -> rx.Component:
         border=f"1px solid {t.BORDER_SUBTLE}",
         border_radius="14px",
         padding="22px",
+        cursor="pointer",
+        on_click=rx.redirect(f"/projetos/{projeto['id']}"),
+        _hover={"box_shadow": "0 10px 28px rgba(0, 0, 0, 0.45)", "border_color": "rgba(20, 184, 166, 0.35)"},
+        transition="all 0.2s ease",
         width="100%",
     )
 

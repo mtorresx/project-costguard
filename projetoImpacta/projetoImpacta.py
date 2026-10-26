@@ -3,7 +3,8 @@
 Rotas:
 - /login     : página pública de login (único público).
 - /          : home autenticada (área principal).
-- /projetos  : projetos (apresentação/mock).
+- /projetos  : projetos (dados reais do Xano).
+- /projetos/[projeto_id]: detalhamento de projeto (dados reais do Xano).
 - /provedores: provedores (dados reais do Xano).
 - /alertas   : alertas (apresentação/mock).
 - /usuarios  : usuários (apresentação/mock).
@@ -21,6 +22,8 @@ import reflex as rx
 from .pages.alertas import alertas_page
 from .pages.home import home_page
 from .pages.login import login_page
+from .pages.projeto_detalhe import projeto_detalhe_page
+from .pages.projeto_detalhe_state import ProjetoDetalheState
 from .pages.projetos import projetos_page
 from .pages.projetos_state import ProjetosState
 from .pages.provedores import provedores_page
@@ -42,6 +45,12 @@ app.add_page(
     route="/projetos",
     title="Projetos — CostGuard",
     on_load=[AuthState.require_auth, ProjetosState.carregar],
+)
+app.add_page(
+    projeto_detalhe_page,
+    route="/projetos/[projeto_id]",
+    title="Detalhamento do Projeto — CostGuard",
+    on_load=[AuthState.require_auth, ProjetoDetalheState.carregar],
 )
 app.add_page(
     provedores_page,
