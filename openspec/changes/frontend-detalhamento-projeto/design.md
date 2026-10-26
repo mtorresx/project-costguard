@@ -23,7 +23,7 @@ Fatos confirmados no código:
 ### D2 — Navegação a partir de `/projetos`
 
 - O card de `projetos.py` mantém o clique que abre o detalhamento (`rx.redirect(f"/projetos/{id}")`), como na referência, e o texto "Ver detalhamento".
-- Os botões Editar e Desativar, visíveis só para admin, ficam dentro do card. Sem tratamento, o clique neles também dispararia a navegação. Eles devem interromper a propagação do evento. A forma exata do Reflex 0.9.12 para isso será confirmada antes do Apply. Se não houver suporte nativo, a alternativa é tornar "Ver detalhamento" um `rx.link` e remover o `on_click` do card. Essa escolha é registrada aqui como risco R2.
+- Os botões Editar e Desativar, visíveis só para admin, ficam dentro do card. Sem tratamento, o clique neles também dispararia a navegação. Eles devem interromper a propagação do evento com `.stop_propagation` no handler (`ProjetosState.abrir_editar(projeto).stop_propagation`). Confirmado na fonte instalada do Reflex 0.9.12 (ver seção "Confirmações Reflex"). Só o clique nos botões é interrompido; o restante do card continua navegando.
 
 ### D3 — Carregamento e erros
 
@@ -36,13 +36,14 @@ Ordem de carregamento em `carregar`:
 
 Nenhuma mensagem exibe corpo técnico cru, status HTTP ou `RequestId`.
 
-### D4 — Janela MTD
+### D4 — Janela MTD (fuso `America/Sao_Paulo`)
 
-- `hoje` é a data UTC atual, como o padrão de `custos-equipe` (`hoje (UTC)`).
-- `data_inicio = primeiro dia do mês de hoje (UTC)`.
+- `hoje` é a data atual no fuso `America/Sao_Paulo`. A interface usa esse fuso para determinar o mês; **a semântica do backend não muda** (o endpoint continua recebendo `data_inicio` inclusiva e `data_fim` exclusiva, em `YYYY-MM-DD`).
+- `data_inicio = primeiro dia do mês de hoje (America/Sao_Paulo)`.
 - `data_fim = hoje + 1 dia`, porque o endpoint trata `data_fim` como exclusivo e o dia de hoje precisa entrar no total.
-- A janela é mostrada na tela como texto ("Período: 01/10/2026 a 26/10/2026"), com a data final de exibição sendo `hoje`. Assim o usuário vê o intervalo real usado.
+- A janela é mostrada na tela como texto ("Período: 01/10/2026 a 26/10/2026"), com a data final de exibição sendo `hoje`.
 - Não há seletor de intervalo.
+- **Dependência**: o fuso é obtido com `zoneinfo.ZoneInfo("America/Sao_Paulo")`. No Windows, a biblioteca padrão não traz o banco de fusos, então `tzdata` é adicionado a `requirements.txt`. Essa inclusão é aprovação pendente (ver proposal). Não se usa deslocamento fixo de UTC-3, porque isso seria uma regra própria no lugar do fuso oficial.
 
 ### D5 — Moeda e orçamento
 
@@ -55,7 +56,7 @@ Nenhuma mensagem exibe corpo técnico cru, status HTTP ou `RequestId`.
 
 A grade passa de 3 para 2 colunas, com o mesmo estilo visual (`_kpi_card_detalhe`):
 
-- Card 1, "Custo atual (MTD)": valor formatado (`US$ 1,234.56`).
+- Card 1, "Custo classificado (MTD)": valor formatado (`US$ 1,234.56`). O rótulo não afirma atualização até este instante, porque o endpoint não expõe a data da última classificação.
 - Card 2, "Orçamento restante": valor restante, barra de progresso e texto "X% utilizado de US$ Y", como na referência.
 
 Não há card de projeção, de variação nem de custo por provedor.
@@ -81,9 +82,10 @@ Não há card de projeção, de variação nem de custo por provedor.
 
 ### D9 — Recursos sem responsável
 
-- O aviso aparece quando há ao menos um recurso ativo com `equipe_id = null`. Esse é o critério real de "Sem responsável" do inventário.
+- **Critério de exibição**: o bloco aparece quando `GET /projetos/{id}/recursos` retorna ao menos um recurso com `ativo = true` e `equipe_id = null`. O custo **não** é usado como condição. Não se usa `custo > 0` para decidir se existem recursos sem responsável.
 - O texto explica o risco de chargeback, como na referência.
-- A linha de custo ("Custo acumulado sem responsável: US$ X") aparece **só quando `moeda` não é nula e `sem_responsavel.total` vem do backend**. Mesmo assim, o valor é o real do backend, e não é calculado pelo frontend.
+- O custo sem responsável é informação financeira adicional, e aparece na linha "Custo acumulado sem responsável: US$ X" **somente quando `moeda` não é nula**, com o valor de `sem_responsavel.total` do backend, sem cálculo no frontend. Esse valor pode ser zero classificado; nesse caso a linha mostra `US$ 0.00`, porque é o valor confirmado pelo backend, não um substituto de dado desconhecido.
+- Podem existir recursos sem responsável com custo zero, e custo sem responsável sem nenhum recurso listado de forma não associada. Não há associação de custo individual por recurso, então a tela não relaciona um valor a um recurso específico.
 - O botão **"Notificar DevOps"** fica visível no mesmo local, com `disabled=True`, sem `on_click` e sem estado. Não há mensagem de sucesso.
 
 ### D10 — Exportação CSV
@@ -98,6 +100,11 @@ Não há card de projeção, de variação nem de custo por provedor.
 
 Valores monetários são formatados em Python, dentro do estado, como strings `US$ 1,234.56`. Não se usa formatação de `Var` dentro do componente, para evitar depender do comportamento de formatação do Reflex. Isso segue a regra do projeto de mostrar duas casas e separador de milhar, sem abreviação.
 
+### D13 — Projeto inativo
+
+- A tela não bloqueia nem esconde o detalhamento de projeto inativo. O acesso segue a rota e a leitura permitidas pelo backend.
+- O cabeçalho mostra o status do projeto com o rótulo "Inativo" quando `status = inativo`, e "Ativo" quando `status = ativo`, usando o mesmo componente de badge da listagem (`_status_badge`).
+
 ### D12 — Acesso e autorização
 
 - A tela é acessível a admin e leitura (todas as leituras usadas são de usuário autenticado). A ocultação de ações é apenas visual. Como o botão Notificar DevOps está desabilitado, não há ação para ocultar.
@@ -106,13 +113,21 @@ Valores monetários são formatados em Python, dentro do estado, como strings `U
 
 ## Riscos e pontos em aberto
 
-- **R1 — Atualidade dos custos**: `custos-equipe` mostra apenas dias já classificados pela rotina de classificação. Se a classificação do mês não rodou até hoje, o custo mostrado fica abaixo do real. A API atual não expõe a data da última classificação, então a tela não consegue indicar frescor. Decisão pendente: aceitar esse limite nesta change (recomendado) ou pedir um endpoint de status em change separada.
-- **R2 — Propagação do clique no card**: depende do suporte do Reflex 0.9.12 para interromper a propagação em botões dentro de um card clicável. Alternativa descrita em D2.
-- **R3 — Fuso horário**: o mês é calculado em UTC. Perto da virada do mês, o início do período pode diferir do mês local do usuário. O comportamento segue o padrão do backend.
-- **R4 — Formato de erro do Xano**: a mensagem do `inputerror` de moedas depende do campo `message` no corpo da resposta. O formato real ainda não foi confirmado. Enquanto não for confirmado, a tela mostra mensagem genérica. Confirmação via Xano Developer MCP antes do Apply.
+- **R1 — Atualidade dos custos (aceito)**: `custos-equipe` mostra apenas dias já classificados. O rótulo "Custo classificado (MTD)" evita afirmar atualização. Aceito nesta change, sem endpoint de status.
+- **R2 — Propagação do clique (resolvido)**: `.stop_propagation` confirmado na fonte instalada do Reflex 0.9.12. Validação visual no E2E (tarefa 7.1).
+- **R3 — Fuso (resolvido)**: mês e data em `America/Sao_Paulo`, com dependência `tzdata` pendente de aprovação.
+- **R4 — Formato de erro do Xano (aberto)**: o campo `message` do `inputerror` ainda não foi confirmado. Enquanto isso, a tela usa mensagem genérica. Nenhum tratamento específico de `inputerror` será implementado antes da confirmação do contrato.
 - **R5 — Nome derivado do ARN**: o nome mostrado é um recorte do ARN, não um campo oficial. O ARN completo fica disponível no tooltip e no CSV para evitar ambiguidade.
 - **R6 — Divergência documental da referência**: `openspec/changes/detalhamento-projeto` da referência descreve dados de exemplo que não existem mais no código. Esta change não copia esses documentos.
-- **R7 — Projeto inativo**: a tela abre o detalhamento de projeto inativo, como a leitura de `GET /projetos/{id}` permite. Nenhum indicador de status é adicionado nesta change. Decisão pendente, se você quiser esconder ou sinalizar.
+- **R7 — Projeto inativo (resolvido)**: a tela abre o detalhamento e mostra o status "Inativo" (D13).
+
+## Confirmações Reflex (pré-Apply, fonte instalada: Reflex 0.9.12)
+
+- **Rota dinâmica**: `[projeto_id]` vira variável do State (`DynamicRouteVar`, tipo `str` para parâmetro único). O registro é feito por `setup_dynamic_args` em `reflex/state.py`. Como o `router_data` é atualizado antes da execução dos `on_load`, `self.projeto_id` está disponível em `carregar`. A confirmação de runtime será feita no E2E (tarefa 7.1).
+- **`on_load`**: `add_page(..., on_load=[...])` aceita lista de eventos (`EventType[()]`), como já usado em `projetoImpacta.py`.
+- **`rx.redirect(path, *, is_external=False, popup=False, replace=False)`**: deve ser retornado pelo handler. Usado no clique do card e na desautorização 401 pelo `AuthState`.
+- **Propagação de clique**: `EventActionsMixin.stop_propagation` (`reflex_base/event/__init__.py`, linha 412) é uma propriedade de `EventHandler` e `EventSpec`. Uso: `on_click=ProjetosState.abrir_editar(projeto).stop_propagation`.
+- **`rx.download(url=None, filename=None, data=None, mime_type=None)`**: `data` aceita `str`, e `filename` define o nome do arquivo. Retornado pelo handler, como no CSV atual da referência.
 
 ## Não-objetivos técnicos
 

@@ -7,13 +7,13 @@ Esta change porta a tela de detalhamento para `C:\projetoImpacta` e a liga aos e
 ## O que muda
 
 - Nova rota `/projetos/[projeto_id]` no projeto principal, com a mesma navegação da referência: clique no card de `/projetos` (ação "Ver detalhamento") abre o detalhamento.
-- Cabeçalho com breadcrumb (Projetos → nome do projeto), nome, subtítulo e botão "Exportar Dados".
-- Duas métricas, calculadas sobre o **mês corrente até a data atual (MTD)**, sem seletor de intervalo:
-  - Custo atual (MTD), a partir de `custos-equipe`.
-  - Orçamento restante, com percentual utilizado do orçamento mensal do projeto.
+- Cabeçalho com breadcrumb (Projetos → nome do projeto), nome, status do projeto (com o rótulo "Inativo" quando o projeto estiver inativo), subtítulo e botão "Exportar Dados". Projeto inativo continua acessível pela rota.
+- Duas métricas, calculadas sobre o **mês corrente até a data atual (MTD)**, no fuso `America/Sao_Paulo`, sem seletor de intervalo:
+  - "Custo classificado (MTD)", a partir de `custos-equipe`. O rótulo indica que o valor é o custo já classificado, sem afirmar que está atualizado até este instante, pois o endpoint não expõe a data da última classificação. Essa limitação é aceita nesta change, sem novo endpoint.
+  - Orçamento restante, com percentual utilizado do orçamento mensal do projeto, calculado somente quando a moeda do custo é compatível com a moeda do orçamento.
 - Bloco "Custo por equipe", com as equipes que têm custo no mês (dados de `custos-equipe`).
 - Bloco "Recursos detalhados por equipe", agrupado por equipe, expansível, com recursos reais do inventário (`recursos` + `equipes`). Sem colunas de valor ou tendência por recurso.
-- Aviso "Recursos sem responsável" quando houver recursos ativos sem equipe, com o botão "Notificar DevOps" **visível e desabilitado**.
+- Bloco "Recursos sem responsável", exibido quando o inventário (`GET /projetos/{id}/recursos`) tem recursos ativos sem equipe. O custo sem responsável (`sem_responsavel.total` de `custos-equipe`), quando houver, aparece como informação financeira adicional, inclusive com valor zero classificado. Não há associação de custo por recurso. O botão "Notificar DevOps" fica **visível e desabilitado**.
 - Exportação CSV gerada no cliente, apenas com dados reais carregados na tela.
 
 ## Fora do escopo
@@ -34,5 +34,5 @@ Esta change porta a tela de detalhamento para `C:\projetoImpacta` e a liga aos e
 
 - **Frontend (Reflex, `projetoImpacta/`)**: novo módulo de página e de estado para o detalhamento, nova rota em `projetoImpacta.py`, ajuste no card de `pages/projetos.py` para navegar ao detalhamento sem disparar as ações de editar e desativar.
 - **Backend (Xano)**: nenhum. Só leitura, sem escrita.
-- **Dependências**: nenhuma nova. Usa `httpx`, `config.get_xano_app_base_url()` e `AuthState`, como no padrão atual.
+- **Dependências**: `httpx`, `config.get_xano_app_base_url()` e `AuthState`, como no padrão atual. Uma dependência nova é necessária: `tzdata`, incluído em `requirements.txt`, porque o `zoneinfo` do Windows não encontra `America/Sao_Paulo` sem esse pacote. A inclusão depende de aprovação, conforme o AGENTS.md.
 - **Specs**: nova capability `frontend-detalhamento-projeto`. Não altera as capabilities consolidadas (`projetos`, `equipes`, `inventario-recursos`, `custos-equipe`).

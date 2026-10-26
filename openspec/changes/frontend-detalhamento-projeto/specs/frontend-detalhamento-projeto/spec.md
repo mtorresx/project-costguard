@@ -52,23 +52,33 @@ O frontend SHALL consultar `GET /projetos/{id}` com o token da sessão (`Authori
 - **WHEN** a consulta do projeto falha por erro de rede
 - **THEN** a página exibe uma mensagem genérica e permanece utilizável
 
+#### Scenario: Projeto inativo continua acessível
+
+- **WHEN** `GET /projetos/{id}` retorna um projeto com `status = inativo`
+- **THEN** a página exibe o detalhamento normalmente e mostra o status "Inativo" no cabeçalho, sem bloquear nem esconder o conteúdo
+
 ### Requirement: Janela de custos do mês corrente
 
-A página SHALL calcular automaticamente a janela de custos como o mês corrente até a data atual, em UTC: `data_inicio` é o primeiro dia do mês e `data_fim` é o dia seguinte à data atual, porque o endpoint trata `data_fim` como exclusivo. A página MUST NOT oferecer seletor de intervalo nesta versão. A página SHALL exibir o período usado como texto, com início e a data atual. A página MUST NOT comparar o orçamento mensal com um intervalo diferente do mês corrente.
+A página SHALL calcular automaticamente a janela de custos como o mês corrente até a data atual, usando o fuso `America/Sao_Paulo` para determinar o mês e a data atual: `data_inicio` é o primeiro dia do mês e `data_fim` é o dia seguinte à data atual, porque o endpoint trata `data_fim` como exclusivo. A semântica do backend não muda. A página MUST NOT oferecer seletor de intervalo nesta versão. A página SHALL exibir o período usado como texto, com início e a data atual. A página MUST NOT comparar o orçamento mensal com um intervalo diferente do mês corrente.
 
 #### Scenario: Janela em meio ao mês
 
-- **WHEN** a data UTC atual é 26/10/2026 e a página é carregada
+- **WHEN** a data atual em `America/Sao_Paulo` é 26/10/2026 e a página é carregada
 - **THEN** a consulta usa `data_inicio = 2026-10-01` e `data_fim = 2026-10-27`, e a tela exibe o período "01/10/2026 a 26/10/2026"
 
 #### Scenario: Primeiro dia do mês
 
-- **WHEN** a data UTC atual é 01/11/2026
+- **WHEN** a data atual em `America/Sao_Paulo` é 01/11/2026
 - **THEN** a consulta usa `data_inicio = 2026-11-01` e `data_fim = 2026-11-02`
+
+#### Scenario: Virada de mês em UTC não altera a janela
+
+- **WHEN** são 02:00 UTC de 01/11/2026, o que equivale a 31/10/2026 23:00 em `America/Sao_Paulo`
+- **THEN** a consulta usa `data_inicio = 2026-10-01` e `data_fim = 2026-11-01`, porque o mês é o de São Paulo
 
 ### Requirement: Métricas financeiras com dados reais
 
-A página SHALL exibir exatamente duas métricas financeiras, em grade de duas colunas com o estilo visual da referência: **Custo atual (MTD)** e **Orçamento restante**, com o percentual utilizado do orçamento mensal (texto "X% utilizado de US$ Y" e barra de progresso). A página MUST NOT exibir projeção do fim do mês, variação percentual, tendência, custo por provedor nem um terceiro card para preencher espaço.
+A página SHALL exibir exatamente duas métricas financeiras, em grade de duas colunas com o estilo visual da referência: **Custo classificado (MTD)** e **Orçamento restante**, com o percentual utilizado do orçamento mensal (texto "X% utilizado de US$ Y" e barra de progresso). O rótulo "Custo classificado" indica que o valor é o custo já classificado e MUST NOT afirmar que ele está atualizado até o momento da consulta. A página MUST NOT exibir projeção do fim do mês, variação percentual, tendência, custo por provedor nem um terceiro card para preencher espaço.
 
 Quando `moeda` for `USD` e `budget` for maior que zero:
 
@@ -79,7 +89,7 @@ Quando `moeda` for `USD` e `budget` for maior que zero:
 #### Scenario: Métricas com custo e orçamento
 
 - **WHEN** `custos-equipe` retorna `moeda = "USD"` e `total_projeto = 1239.73` e o projeto tem `budget = 2000.00`
-- **THEN** a página exibe "US$ 1,239.73" como custo atual, "US$ 760.27" como orçamento restante e "62.0% utilizado de US$ 2,000.00"
+- **THEN** a página exibe "US$ 1,239.73" como "Custo classificado (MTD)", "US$ 760.27" como orçamento restante e "62.0% utilizado de US$ 2,000.00"
 
 #### Scenario: Estouro de orçamento
 
@@ -95,7 +105,7 @@ Quando `moeda` for `USD` e `budget` for maior que zero:
 
 A página MUST NOT usar valor fictício, zero como substituto de custo desconhecido, nem tendência inventada. Quando `custos-equipe` retornar `moeda = null` (sem registros no período), a página SHALL mostrar "Sem custos classificados no mês até a data atual." no lugar dos valores de custo e de orçamento restante, sem calcular o restante a partir de zero.
 
-Quando `moeda` for diferente de `USD`, a página SHALL mostrar o custo com a moeda retornada e MUST NOT calcular orçamento restante nem percentual, informando que a comparação com o orçamento em USD não é feita.
+O orçamento restante e o percentual SHALL ser calculados somente quando a moeda do custo for compatível com a moeda do orçamento (USD). Quando `moeda` for diferente de `USD`, a página SHALL mostrar o custo com a moeda retornada e MUST NOT calcular orçamento restante nem percentual, informando que a comparação com o orçamento em USD não é feita. A página MUST NOT converter valores entre moedas.
 
 Quando `budget` for zero, a página SHALL mostrar "Sem orçamento definido" no lugar do percentual e do orçamento restante.
 
@@ -160,19 +170,31 @@ Sem recursos ativos, a página SHALL mostrar "Nenhum recurso registrado ainda."
 
 ### Requirement: Aviso de recursos sem responsável
 
-A página SHALL exibir o aviso "Recursos sem responsável" quando houver ao menos um recurso ativo com `equipe_id = null`. O aviso SHALL conter a explicação de que esses recursos pertencem ao projeto, mas não têm tag de equipe. A linha "Custo acumulado sem responsável: US$ X" SHALL aparecer somente quando `moeda` não for nula e o valor vier de `sem_responsavel.total` do backend.
+A página SHALL exibir o bloco "Recursos sem responsável" quando o inventário de `GET /projetos/{id}/recursos` tiver ao menos um recurso com `ativo = true` e `equipe_id = null`. Essa é a única condição de exibição do bloco: a página MUST NOT usar custo maior que zero para decidir se existem recursos sem responsável. O bloco SHALL conter a explicação de que esses recursos pertencem ao projeto, mas não têm tag de equipe.
+
+Quando `moeda` não for nula, o bloco SHALL mostrar a linha "Custo acumulado sem responsável: US$ X" com o valor de `sem_responsavel.total` do backend, como informação financeira adicional, mesmo que o valor seja zero. A página MUST NOT calcular esse valor, MUST NOT associar custo a um recurso individual e MUST NOT inventar associação entre custo e recurso.
 
 O botão **"Notificar DevOps"** SHALL aparecer no mesmo local do design de referência, **desabilitado**, sem ação associada. A página MUST NOT exibir mensagem de sucesso, MUST NOT enviar e-mail e MUST NOT chamar qualquer endpoint de notificação nesta versão.
 
-#### Scenario: Aviso com recursos sem equipe
+#### Scenario: Bloco com recursos sem equipe
 
 - **WHEN** há recursos ativos com `equipe_id = null`
-- **THEN** o aviso aparece, com o botão "Notificar DevOps" desabilitado
+- **THEN** o bloco aparece, com o botão "Notificar DevOps" desabilitado
 
 #### Scenario: Sem recursos sem equipe
 
 - **WHEN** não há recursos ativos com `equipe_id = null`
-- **THEN** o aviso não aparece
+- **THEN** o bloco não aparece, mesmo que `sem_responsavel.total` seja maior que zero
+
+#### Scenario: Recursos sem equipe com custo classificado zero
+
+- **WHEN** há recursos ativos com `equipe_id = null` e `custos-equipe` retorna `moeda = "USD"` com `sem_responsavel.total = 0`
+- **THEN** o bloco aparece e mostra "Custo acumulado sem responsável: US$ 0.00" como informação adicional
+
+#### Scenario: Custo sem responsável com lista de recursos
+
+- **WHEN** há recursos ativos com `equipe_id = null` e `sem_responsavel.total = 1239.73` em `moeda = "USD"`
+- **THEN** o bloco mostra a lista de recursos e o valor "US$ 1,239.73" como custo acumulado, sem associar esse valor a nenhum recurso específico
 
 #### Scenario: Botão desabilitado
 
