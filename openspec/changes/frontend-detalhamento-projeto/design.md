@@ -73,7 +73,12 @@ Não há card de projeção, de variação nem de custo por provedor.
 
 - Fontes: `recursos` (filtrado para `ativo = true` na tela) e `equipes` (para o nome por `equipe_id`).
 - Justificativa do uso de `/equipes`: `custos-equipe` só lista equipes com custo, e `codigo_equipe_tag` é o valor cru da tag. Usar `equipe_id` com o nome de `/equipes` é a única forma de nomear de forma correta todas as equipes com recurso, inclusive as sem custo no mês. Este é o uso previsto em "necessidade real" do pedido.
-- Grupos: um grupo por `equipe_id` com nome da equipe, mais um grupo "Sem responsável" para `equipe_id = null`. Grupos ordenados por nome, e "Sem responsável" por último.
+- Grupos (regra aprovada após o E2E):
+  - `equipe_id > 0`: grupo da equipe real, com nome de `/equipes`.
+  - `equipe_id` ausente ou 0 e `codigo_equipe_tag` vazio: grupo "Sem responsável".
+  - `equipe_id` ausente ou 0 e `codigo_equipe_tag` preenchido: grupo "Equipe não vinculada — <TAG>", um por tag. Não se mistura tag diferente, não se cria equipe no frontend e a inconsistência não é escondida.
+  - Ordem: equipes reais por nome, depois "Equipe não vinculada", e "Sem responsável" por último.
+  - Valor 0 nunca é tratado como equipe válida.
 - Cada grupo mostra o nome da equipe e "N recursos", e é recolhível, como na referência (`_grupo_recursos`, com `equipes_recolhidas`).
 - Colunas da tabela: **Recurso**, **Serviço** e **Região**. Não há coluna de valor nem de tendência.
 - **Recurso**: último segmento do ARN (após o último `/` ou `:`). O ARN completo fica no `title` da célula (tooltip) e no CSV. Se o ARN não tiver separadores, mostra o ARN inteiro.
@@ -82,7 +87,7 @@ Não há card de projeção, de variação nem de custo por provedor.
 
 ### D9 — Recursos sem responsável
 
-- **Critério de exibição**: o bloco aparece quando `GET /projetos/{id}/recursos` retorna ao menos um recurso com `ativo = true` e `equipe_id = null`. O custo **não** é usado como condição. Não se usa `custo > 0` para decidir se existem recursos sem responsável.
+- **Critério de exibição**: o bloco aparece quando `GET /projetos/{id}/recursos` retorna ao menos um recurso com `ativo = true`, `equipe_id` ausente ou 0 e `codigo_equipe_tag` vazio. O custo **não** é usado como condição. Não se usa `custo > 0` para decidir se existem recursos sem responsável.
 - O texto explica o risco de chargeback, como na referência.
 - O custo sem responsável é informação financeira adicional, e aparece na linha "Custo acumulado sem responsável: US$ X" **somente quando `moeda` não é nula**, com o valor de `sem_responsavel.total` do backend, sem cálculo no frontend. Esse valor pode ser zero classificado; nesse caso a linha mostra `US$ 0.00`, porque é o valor confirmado pelo backend, não um substituto de dado desconhecido.
 - Podem existir recursos sem responsável com custo zero, e custo sem responsável sem nenhum recurso listado de forma não associada. Não há associação de custo individual por recurso, então a tela não relaciona um valor a um recurso específico.
@@ -117,6 +122,8 @@ Valores monetários são formatados em Python, dentro do estado, como strings `U
 - **R2 — Propagação do clique (resolvido)**: `.stop_propagation` confirmado na fonte instalada do Reflex 0.9.12. Validação visual no E2E (tarefa 7.1).
 - **R3 — Fuso (resolvido)**: mês e data em `America/Sao_Paulo`, com dependência `tzdata` pendente de aprovação.
 - **R4 — Formato de erro do Xano (aberto)**: o campo `message` do `inputerror` ainda não foi confirmado. Enquanto isso, a tela usa mensagem genérica. Nenhum tratamento específico de `inputerror` será implementado antes da confirmação do contrato.
+- **R8 — Inconsistência de backend (aberta, fora desta change)**: no E2E foram confirmados recursos ativos com `equipe_id = 0` (projeto 4: 5 recursos com tag vazia; projeto 6: 31 recursos, sendo 13 BACKEND, 14 WEB, 2 MARKETING e 2 com tag vazia), todos com `sem_responsavel = true` no backend. Há tag preenchida sem vínculo interno de equipe. O frontend apresenta esse estado como "Equipe não vinculada", sem esconder, mas a causa precisa de investigação no backend (rotina de sincronização/inventário). Nenhum backend foi alterado nesta change.
+- **R9 — 429 no `AuthState` (follow-up, fora desta change)**: `AuthState.require_auth` interpreta qualquer resposta de `/me` diferente de 200 como sessão expirada. HTTP 429 do Xano limpa a sessão do usuário. Deve ser tratado separadamente em change futura.
 - **R5 — Nome derivado do ARN**: o nome mostrado é um recorte do ARN, não um campo oficial. O ARN completo fica disponível no tooltip e no CSV para evitar ambiguidade.
 - **R6 — Divergência documental da referência**: `openspec/changes/detalhamento-projeto` da referência descreve dados de exemplo que não existem mais no código. Esta change não copia esses documentos.
 - **R7 — Projeto inativo (resolvido)**: a tela abre o detalhamento e mostra o status "Inativo" (D13).

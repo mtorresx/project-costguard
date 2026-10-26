@@ -150,8 +150,13 @@ Sem recursos ativos, a página SHALL mostrar "Nenhum recurso registrado ainda."
 
 #### Scenario: Agrupamento por equipe
 
-- **WHEN** o projeto tem recursos ativos com `equipe_id` de `BACKEND` e de `QA`, e recursos com `equipe_id = null`
+- **WHEN** o projeto tem recursos ativos com `equipe_id` de `BACKEND` e de `QA`, e recursos com `equipe_id = null` e tag de equipe vazia
 - **THEN** a página mostra um grupo para cada equipe com seu nome, e um grupo "Sem responsável" por último
+
+#### Scenario: Equipe_id 0 com tag preenchida não é equipe real
+
+- **WHEN** há recursos ativos com `equipe_id = 0` e `codigo_equipe_tag` igual a `BACKEND`, `WEB` e `MARKETING`
+- **THEN** a página cria um grupo "Equipe não vinculada — BACKEND", um "Equipe não vinculada — WEB" e um "Equipe não vinculada — MARKETING", sem misturar tags, sem criar equipe e sem apresentar esses grupos como equipes reais
 
 #### Scenario: Recurso inativo não aparece
 
@@ -170,7 +175,7 @@ Sem recursos ativos, a página SHALL mostrar "Nenhum recurso registrado ainda."
 
 ### Requirement: Aviso de recursos sem responsável
 
-A página SHALL exibir o bloco "Recursos sem responsável" quando o inventário de `GET /projetos/{id}/recursos` tiver ao menos um recurso com `ativo = true` e `equipe_id = null`. Essa é a única condição de exibição do bloco: a página MUST NOT usar custo maior que zero para decidir se existem recursos sem responsável. O bloco SHALL conter a explicação de que esses recursos pertencem ao projeto, mas não têm tag de equipe.
+A página SHALL exibir o bloco "Recursos sem responsável" quando o inventário de `GET /projetos/{id}/recursos` tiver ao menos um recurso com `ativo = true` cujo vínculo de equipe seja ausente (`equipe_id` null ou 0) e cuja `codigo_equipe_tag` esteja vazia. Essa é a única condição de exibição do bloco: a página MUST NOT usar custo maior que zero para decidir se existem recursos sem responsável. O bloco SHALL conter a explicação de que esses recursos pertencem ao projeto, mas não têm tag de equipe.
 
 Quando `moeda` não for nula, o bloco SHALL mostrar a linha "Custo acumulado sem responsável: US$ X" com o valor de `sem_responsavel.total` do backend, como informação financeira adicional, mesmo que o valor seja zero. A página MUST NOT calcular esse valor, MUST NOT associar custo a um recurso individual e MUST NOT inventar associação entre custo e recurso.
 
@@ -178,22 +183,22 @@ O botão **"Notificar DevOps"** SHALL aparecer no mesmo local do design de refer
 
 #### Scenario: Bloco com recursos sem equipe
 
-- **WHEN** há recursos ativos com `equipe_id = null`
+- **WHEN** há recursos ativos com `equipe_id` null ou 0 e tag de equipe vazia
 - **THEN** o bloco aparece, com o botão "Notificar DevOps" desabilitado
 
 #### Scenario: Sem recursos sem equipe
 
-- **WHEN** não há recursos ativos com `equipe_id = null`
+- **WHEN** não há recursos ativos sem equipe e sem tag
 - **THEN** o bloco não aparece, mesmo que `sem_responsavel.total` seja maior que zero
 
 #### Scenario: Recursos sem equipe com custo classificado zero
 
-- **WHEN** há recursos ativos com `equipe_id = null` e `custos-equipe` retorna `moeda = "USD"` com `sem_responsavel.total = 0`
+- **WHEN** há recursos ativos sem equipe e sem tag e `custos-equipe` retorna `moeda = "USD"` com `sem_responsavel.total = 0`
 - **THEN** o bloco aparece e mostra "Custo acumulado sem responsável: US$ 0.00" como informação adicional
 
 #### Scenario: Custo sem responsável com lista de recursos
 
-- **WHEN** há recursos ativos com `equipe_id = null` e `sem_responsavel.total = 1239.73` em `moeda = "USD"`
+- **WHEN** há recursos ativos sem equipe e sem tag e `sem_responsavel.total = 1239.73` em `moeda = "USD"`
 - **THEN** o bloco mostra a lista de recursos e o valor "US$ 1,239.73" como custo acumulado, sem associar esse valor a nenhum recurso específico
 
 #### Scenario: Botão desabilitado

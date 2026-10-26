@@ -334,6 +334,7 @@ def _bloco_sem_responsavel() -> rx.Component:
                 rx.icon("triangle-alert", size=20, color=t.ERROR, flex_shrink="0"),
                 rx.vstack(
                     rx.text("⚠️ Recursos sem responsável", font_weight="600", font_size="13px", color=t.TEXT_HIGH),
+                    rx.text(ProjetoDetalheState.texto_sem_responsavel, font_size="12px", font_weight="600", color=t.TEXT_HIGH),
                     rx.text(
                         "Estes recursos já pertencem ao projeto, mas não têm tag de equipe (EQP) atribuída. "
                         "Sem equipe, não há como saber quem gerou o custo (chargeback).",

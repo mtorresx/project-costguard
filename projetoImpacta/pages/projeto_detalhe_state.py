@@ -182,6 +182,7 @@ class ProjetoDetalheState(rx.State):
     grupos: list[GrupoRecursos] = []
     total_sem_responsavel: int = 0
     bloco_sem_responsavel: bool = False
+    texto_sem_responsavel: str = ""
     equipes_recolhidas: list[str] = []
 
     async def _token(self) -> str:
@@ -296,7 +297,7 @@ class ProjetoDetalheState(rx.State):
         )
         self.equipes_custo = [
             EquipeCusto(
-                chave=str(item.get("equipe_id")),
+                chave=f"eq:{item.get('equipe_id')}",
                 nome=item.get("nome") or item.get("codigo") or "",
                 recursos_texto="",
                 total_texto=formatar_valor(_numero(item.get("total")), moeda),
@@ -357,6 +358,14 @@ class ProjetoDetalheState(rx.State):
         self._montar_recursos(recursos, equipes)
 
     def _montar_recursos(self, recursos: list, equipes: list):
+        """Agrupa os recursos ativos pelo vínculo real com a equipe.
+
+        Regras aprovadas (E2E, inconsistência de backend):
+        - equipe_id > 0: grupo da equipe real (chave "eq:<id>");
+        - equipe_id ausente ou 0 e tag vazia: "Sem responsável" (chave "sem");
+        - equipe_id ausente ou 0 e tag preenchida: "Equipe não vinculada — <TAG>",
+          um grupo por tag (chave "nv:<TAG>"), sem misturar tags nem criar equipe.
+        """
         nomes = {
             str(e.get("id")): (e.get("nome") or e.get("codigo") or "")
             for e in equipes
@@ -365,17 +374,24 @@ class ProjetoDetalheState(rx.State):
         ativos = [r for r in recursos if isinstance(r, dict) and r.get("ativo") is True]
 
         por_chave: dict[str, list[dict]] = {}
+        rotulos: dict[str, str] = {}
         for r in ativos:
             eid = r.get("equipe_id")
-            chave = str(eid) if eid is not None else "sem"
+            if isinstance(eid, int) and eid > 0:
+                chave = f"eq:{eid}"
+                rotulos[chave] = nomes.get(str(eid)) or "Equipe sem nome"
+            else:
+                tag = (r.get("codigo_equipe_tag") or "").strip()
+                if tag:
+                    chave = f"nv:{tag}"
+                    rotulos[chave] = f"Equipe não vinculada — {tag}"
+                else:
+                    chave = "sem"
+                    rotulos[chave] = TEXTO_SEM_RESPONSAVEL
             por_chave.setdefault(chave, []).append(r)
 
         grupos: list[GrupoRecursos] = []
         for chave, itens in por_chave.items():
-            if chave == "sem":
-                equipe = TEXTO_SEM_RESPONSAVEL
-            else:
-                equipe = nomes.get(chave) or itens[0].get("codigo_equipe_tag") or "Equipe sem nome"
             detalhes = []
             for r in sorted(itens, key=lambda x: nome_recurso(x.get("arn") or "")):
                 arn = r.get("arn") or ""
@@ -394,20 +410,31 @@ class ProjetoDetalheState(rx.State):
             grupos.append(
                 GrupoRecursos(
                     chave=chave,
-                    equipe=equipe,
+                    equipe=rotulos[chave],
                     total_texto=_texto_recursos(len(itens)),
                     recursos=detalhes,
                 )
             )
 
-        # Equipes por nome; "Sem responsável" sempre por último.
-        grupos.sort(key=lambda g: (g["chave"] == "sem", g["equipe"].casefold()))
+        # Ordem: equipes reais por nome, depois "Equipe não vinculada", "Sem responsável" por último.
+        def ordem(g: GrupoRecursos) -> tuple[int, str]:
+            if g["chave"] == "sem":
+                return (2, "")
+            if g["chave"].startswith("nv:"):
+                return (1, g["equipe"].casefold())
+            return (0, g["equipe"].casefold())
+
+        grupos.sort(key=ordem)
         self.grupos = grupos
         self.total_sem_responsavel = len(por_chave.get("sem", []))
         self.bloco_sem_responsavel = self.total_sem_responsavel > 0
+        self.texto_sem_responsavel = (
+            f"{self.total_sem_responsavel} recurso" + ("" if self.total_sem_responsavel == 1 else "s")
+            + " ativo" + ("" if self.total_sem_responsavel == 1 else "s") + " sem equipe e sem tag de equipe."
+        )
         self.equipes_recolhidas = []
 
-        # Contagem de recursos ativos por equipe, somente quando o inventário carregou.
+        # Contagem de recursos ativos por equipe real, somente quando o inventário carregou.
         self.equipes_custo = [
             EquipeCusto(
                 chave=item["chave"],
