@@ -83,3 +83,11 @@ Não testado nesta change:
 - Tag Key customizada (diferente de `PRJ`/`EQP`): o Mock só aceita `PRJ` e `EQP`; a configurabilidade foi verificada apenas por revisão de código.
 - Semântica temporal real: o Mock reescreve todo o histórico do recurso quando a tag muda. O E2E comprova a reconciliação da janela, não a atribuição histórica da AWS real.
 - Dataset do CostGuard após o E2E de paginação: limpeza concluída em 2026-10-25 (870 linhas temporárias removidas; `custos_equipe` restaurada para as 162 linhas do baseline e reclassificada; ver 5.2/10.3).
+
+## Fechamento técnico (2026-10-26)
+
+- Diagnóstico temporário dos BUG-4/BUG-5 removido do `classificar_custos_equipe_provedor_POST.xs` após os 24/24 E2E: variável `$etapa`, os 29 marcadores `var.update $etapa`, o `conditional` que distinguia `resolver_proj_nulo`/`resolver_status` e o sufixo `(etapa: ...)` da mensagem. A falha de normalização volta à mensagem sanitizada definitiva "Falha ao processar a resposta do AWS Cost Explorer". Correções funcionais preservadas: objetos intermediários antes de `set`/`push`, chaves internas de mapa com SHA-256, `$cache_item_inexistente` montado a partir de variáveis, tratamento de projeto inexistente, paginação, reconciliação e normalização `trim` + maiúsculas.
+- Ambiente de teste restaurado: AWS Mock (recursos 4, 52, 63 e 116), provedor 2 (conta 549596426108, `status = ok`, credenciais iguais por hash), projetos 4 e 10 `ativo`, `custos_equipe` no baseline de 162 linhas (coletas id 21).
+- Usuário E2E `role = leitura` desativado pelo usuário (não excluído).
+- Change pronta para validação final: publicar o POST sem o diagnóstico, rodar uma classificação de confirmação do baseline e então arquivar.
+

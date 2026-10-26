@@ -298,9 +298,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     // Agregados: chave -> item; $agg_chaves preserva a ordem de inserção.
     var $agg { value = {} }
     var $agg_chaves { value = [] }
-    // DIAGNÓSTICO TEMPORÁRIO (BUG-4): identificador fixo da última operação
-    // iniciada na normalização. Nunca contém dados da AWS nem segredos.
-    var $etapa { value = "" }
 
     conditional {
       if ($falhou == false) {
@@ -315,18 +312,12 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
             foreach (($rbt.Groups ?? [])) {
               each as $grupo {
-                var.update $etapa { value = "inicio_grupo" }
-                var.update $etapa { value = "extrair_prj" }
                 var $chave_prj { value = ($grupo.Keys|first) }
-                var.update $etapa { value = "extrair_eqp" }
                 var $chave_eqp { value = ($grupo.Keys[1] ?? "") }
-                var.update $etapa { value = "extrair_valor" }
                 var $valor_grupo { value = ($grupo.Metrics.UnblendedCost.Amount ?? "0")|to_decimal }
-                var.update $etapa { value = "extrair_moeda" }
                 var $moeda_grupo { value = ($grupo.Metrics.UnblendedCost.Unit ?? "USD") }
 
                 // Remove exatamente "<Key>$", depois trim + upper.
-                var.update $etapa { value = "normalizar_prj" }
                 var $valor_prj { value = "" }
                 conditional {
                   if ($chave_prj != null && ($chave_prj|starts_with:$prefixo_prj)) {
@@ -335,7 +326,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                 }
                 var $codigo_prj { value = ($valor_prj|trim)|to_upper }
 
-                var.update $etapa { value = "normalizar_eqp" }
                 var $valor_eqp { value = "" }
                 conditional {
                   if ($chave_eqp != null && ($chave_eqp|starts_with:$prefixo_eqp)) {
@@ -352,12 +342,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                   else {
                     // Resolve o projeto uma vez por código (cache).
                     // Chave interna segura do mapa (o codigo_prj real segue na lógica).
-                    var.update $etapa { value = "cache_hash" }
                     var $cache_prj_key { value = "k" ~ ($codigo_prj|sha256) }
-                    var.update $etapa { value = "cache_has" }
                     conditional {
                       if (($cache_projetos|has:$cache_prj_key) == false) {
-                        var.update $etapa { value = "cache_consulta" }
                         db.query projetos {
                           where = $db.projetos.codigo == $codigo_prj
                           return = {type: "single"}
@@ -365,10 +352,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
 
                         conditional {
                           if ($proj_db == null) {
-                            var.update $etapa { value = "cache_set" }
                             // Valores intermediários: um objeto só com literais é
                             // normalizado pelo Xano num bloco de expressão que não
-                            // se comporta como objeto em runtime (BUG-5).
+                            // se comporta como objeto em runtime.
                             var $id_inexistente { value = 0 }
                             var $status_inexistente { value = "inexistente" }
                             var $cache_item_inexistente {
@@ -382,7 +368,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                             }
                           }
                           else {
-                            var.update $etapa { value = "cache_set" }
                             var $cache_item_projeto {
                               value = {
                                 id    : $proj_db.id
@@ -397,45 +382,25 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                       }
                     }
 
-                    var.update $etapa { value = "cache_get" }
                     var $proj { value = $cache_projetos|get:$cache_prj_key:null }
-                    var.update $etapa { value = "cache_get_ok" }
 
-                    // DIAGNÓSTICO TEMPORÁRIO (BUG-5): só marca a etapa; não muda o fluxo.
-                    conditional {
-                      if ($proj == null) {
-                        var.update $etapa { value = "resolver_proj_nulo" }
-                      }
-                      else {
-                        var.update $etapa { value = "resolver_status" }
-                      }
-                    }
                     conditional {
                       if ($proj.status == "inexistente") {
-                        var.update $etapa { value = "resolver_inexistente" }
-                        var.update $etapa { value = "resolver_inexistente_contador" }
                         var.update $tags_sem_projeto { value = $tags_sem_projeto + 1 }
                       }
                       elseif ($proj.status != "ativo") {
-                        var.update $etapa { value = "resolver_inativo" }
-                        var.update $etapa { value = "resolver_inativo_contador" }
                         var.update $projetos_inativos { value = $projetos_inativos + 1 }
                       }
                       else {
                         // Projeto ativo: agrega por (projeto, equipe, dia, métrica).
-                        var.update $etapa { value = "montar_chave_agg" }
-                        var.update $etapa { value = "resolver_id" }
                         var $chave_agg { value = ($proj.id|to_text) ~ "|" ~ $codigo_eqp ~ "|" ~ $dia ~ "|unblended" }
 
                         // Chave interna segura do mapa; a chave lógica acima não muda.
-                        var.update $etapa { value = "agg_hash" }
                         var $agg_key { value = "k" ~ ($chave_agg|sha256) }
-                        var.update $etapa { value = "agg_has" }
                         conditional {
                           if (($agg|has:$agg_key) == false) {
                             // Objeto montado em variável própria: objetos
                             // multi-linha não podem ser argumento de filtro.
-                            var.update $etapa { value = "agg_montar_item" }
                             var $novo_item {
                               value = {
                                 projeto_id   : $proj.id
@@ -446,15 +411,12 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 estimado     : $estimado
                               }
                             }
-                            var.update $etapa { value = "agg_set_novo" }
                             var.update $agg {
                               value = $agg|set:$agg_key:$novo_item
                             }
-                            var.update $etapa { value = "agg_push" }
                             var.update $agg_chaves { value = $agg_chaves|push:$agg_key }
                           }
                           else {
-                            var.update $etapa { value = "agg_get" }
                             var $item_atual { value = $agg|get:$agg_key:null }
                             conditional {
                               if ($item_atual.moeda != $moeda_grupo) {
@@ -462,7 +424,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                 var.update $moeda_divergente { value = true }
                               }
                               else {
-                                var.update $etapa { value = "agg_montar_soma" }
                                 var $item_somado {
                                   value = {
                                     projeto_id   : $item_atual.projeto_id
@@ -473,7 +434,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                                     estimado     : $item_atual.estimado || $estimado
                                   }
                                 }
-                                var.update $etapa { value = "agg_set_soma" }
                                 var.update $agg {
                                   value = $agg|set:$agg_key:$item_somado
                                 }
@@ -485,7 +445,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
                     }
                   }
                 }
-                var.update $etapa { value = "fim_grupo" }
               }
             }
           }
@@ -717,7 +676,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
             var.update $mensagem { value = "Custos com moedas diferentes na mesma chave; agregação não suportada" }
           }
           elseif ($falha_normalizacao == true) {
-            var.update $mensagem { value = "Falha ao processar a resposta do AWS Cost Explorer (etapa: " ~ $etapa ~ ")" }
+            var.update $mensagem { value = "Falha ao processar a resposta do AWS Cost Explorer" }
           }
           elseif ($falha_persistencia == true) {
             var.update $mensagem { value = "Falha ao persistir custos por equipe; reexecute a classificação" }
