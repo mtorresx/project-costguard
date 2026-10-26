@@ -1,2 +1,3 @@
 python-dotenv==1.2.4
 reflex==0.9.12
+tzdata==2026.5
