@@ -79,7 +79,8 @@ As principais fontes são:
 - `openspec/config.yaml` — contexto e regras persistentes do OpenSpec;
 - `openspec/specs/` — especificações consolidadas resultantes de Changes arquivadas;
 - `openspec/changes/` — mudanças em elaboração ou implementação;
-- `xano/` — representação local da implementação existente no backend Xano.
+- `xano/` — representação local da implementação existente no backend Xano;
+- `C:\frontend-costguard` — frontend original de referência visual (somente leitura; ver §16).
 
 Não inventar requisitos, regras de negócio ou decisões arquiteturais.
 
@@ -148,6 +149,8 @@ Review
 Apply
    ↓
 Verify / Test
+   ↓
+Homologação humana (§15)
    ↓
 Archive
 ```
@@ -258,21 +261,26 @@ O fluxo padrão é:
 ```text
 main
   ↓
-nova branch da feature
+nova branch da feature (criada pelo usuário)
   ↓
 OpenSpec Change
   ↓
-implementação
+revisão dos artefatos (Codex)
   ↓
-testes e validação
+implementação (Claude Code)
   ↓
+testes e auditorias
+  ↓
+revisão final (Codex)
+  ↓
+homologação pelo usuário (§15)
+  ↓  AJUSTAR → correção → novos testes → nova revisão → nova homologação
+  ↓  CONCLUÍDA
 archive
   ↓
-revisão pelo usuário
+commits locais (Claude Code, §11)
   ↓
-commit / push
-  ↓
-integração na main
+push / integração na main (usuário, ou agente com autorização específica)
 ```
 
 Regras:
@@ -295,22 +303,31 @@ feature/importacao-recursos
 
 ## 11. Git — operações reservadas ao usuário
 
-O usuário mantém controle exclusivo sobre staging, commits, publicação e integração do histórico Git.
+O usuário mantém controle sobre staging, commits, publicação e integração do histórico Git. A única exceção é a de commits locais após homologação, descrita abaixo.
 
-O agente NUNCA deve executar:
+O agente NUNCA deve executar, salvo autorização específica do usuário para aquela operação, naquele momento:
 
 ```text
-git add
-git commit
 git push
 git merge
 git rebase
 git reset
+```
+
+Não existe autorização permanente para essas operações: uma autorização vale somente para a operação autorizada e não se estende a operações futuras. A mesma regra vale para abrir Pull Requests.
+
+O agente NUNCA deve executar:
+
+```text
 git revert
 git tag
 git stash
 git clean
+git checkout -- <arquivo>
+git restore
 ```
+
+`git add` e `git commit` só podem ser executados conforme a exceção "Commits locais após homologação".
 
 O agente também não deve:
 
@@ -378,9 +395,28 @@ Commit sugerido:
 git commit -m "docs: define authentication base change"
 ```
 
-O agente fornece essas instruções, mas não as executa.
+O agente fornece essas instruções, mas não as executa, exceto na situação prevista em "Exceção: commits locais após homologação".
 
-O mesmo princípio vale para `git push`, merge ou qualquer integração com a `main`: o agente pode fornecer o comando, mas o usuário é quem executa.
+O mesmo princípio vale para `git push`, merge ou qualquer integração com a `main`: o agente pode fornecer o comando, mas o usuário é quem executa, salvo autorização específica.
+
+### Exceção: commits locais após homologação
+
+**Precedência:** depois de o usuário responder exatamente `CONCLUÍDA` na homologação de uma Change (§15), esta exceção prevalece sobre as demais restrições de `git add` e `git commit` desta seção. Ela autoriza o Claude Code a realizar os commits locais dos arquivos daquela Change sem nova autorização, conforme as regras abaixo. Antes de `CONCLUÍDA`, ou para arquivos fora da Change, a exceção não se aplica.
+
+Nessa situação, o Claude Code (coordenador) pode executar:
+
+- `git add <arquivos listados um a um>`: nunca `git add .`, `git add -A` ou `git add -u`;
+- `git commit -m "<mensagem>"`: seguindo as convenções do histórico do repositório (`feat(...)`, `fix(...)`, `test(...)`, `docs(openspec): ...`), em português.
+
+Regras da exceção:
+
+- antes de cada commit, mostrar ao usuário a lista de arquivos e a mensagem;
+- não incluir arquivos fora do escopo da Change (ex.: `reflex.lock/` alterado apenas pela compilação) nem arquivos com segredos (ex.: `.env`);
+- nunca usar `--amend`, `--no-verify`, `--no-gpg-sign` ou commits vazios;
+- nunca executar `git push` automaticamente após os commits;
+- se algum hook falhar, interromper e informar o usuário.
+
+Fora dessa exceção, valem as regras de "Ao finalizar uma etapa": o agente fornece os comandos e o usuário os executa.
 
 ## 12. Controle de mudanças
 
@@ -428,3 +464,112 @@ Não tratar documentação antiga como automaticamente correta.
 Confrontar implementação, documentação e especificação quando necessário.
 
 Se houver conflito relevante, apresentar o conflito ao usuário antes de tomar uma decisão.
+
+## 14. Fluxo multiagente (Claude Code + Codex, coordenados pelo Orca)
+
+### Papéis
+
+- **Claude Code — coordenador e único executor.** Único agente que edita arquivos do repositório, marca tarefas, executa `openspec archive`, publica no Xano e faz commits locais (§11).
+- **Codex — revisor.** Somente leitura. Não edita arquivos, não marca tarefas, não executa `xano workspace push`, não grava dados no Xano e não executa comandos Git que alterem o repositório. Entrega os achados ao coordenador, que decide como aplicá-los.
+- **Kiro** permanece configurado no projeto. Suas skills e prompts (`.kiro/`) e o `openspec/config.yaml` devem ser preservados.
+- **Kimi** não é utilizado neste projeto.
+- Nenhum outro agente participa sem aprovação explícita do usuário.
+
+### Um escritor por vez
+
+- Somente o Claude Code escreve em arquivos do repositório e publica no Xano.
+- Achados do revisor são aplicados pelo coordenador, nunca pelo revisor.
+- Após cada revisão, o coordenador confere `git status` para garantir que o revisor não alterou arquivos.
+- Publicação no Xano: sempre precedida de dry-run filtrado (`-i <arquivo>`), restrita aos objetos da Change atual, com cópia da versão anterior para recuperação. Dentro desses limites, não exige aprovação a cada publicação (§17).
+
+### Uma Change por vez
+
+- Somente uma Change ativa por vez em `openspec/changes/`.
+- Uma nova Change só começa depois de a anterior ser arquivada e commitada, ou por decisão explícita do usuário.
+
+### Retomada de trabalho
+
+- Antes de agir, ler `git status`, `git diff` e o `tasks.md` da Change, e retomar a partir das evidências registradas.
+- Alterações locais existentes são preservadas: nunca descartar, sobrescrever ou reverter trabalho não commitado sem autorização.
+- Pendências e bloqueios registrados em `tasks.md` continuam válidos até decisão do usuário.
+
+### Dados reais
+
+- Não alterar dados reais apenas para testar.
+- Testes que gravam dados no Xano (criar, editar ou desativar registros, reativar usuários, alterar `budget` etc.) exigem autorização explícita do usuário para aquele teste. Sem ela, registrar o teste como não executado e o risco remanescente.
+- Preferir leitura, linha de base e comparação. Quando um teste autorizado alterar dados, restaurar o estado anterior e registrar a restauração.
+
+### Ferramentas OpenSpec
+
+- Os fluxos `apply`, `archive`, `explore`, `propose`, `sync` e `update` estão em `.kiro/skills/openspec-*/SKILL.md` e `.kiro/prompts/`. Ler o arquivo correspondente antes de usar o fluxo, ou usar diretamente a CLI `openspec`.
+
+## 15. Homologação
+
+Antes de solicitar a homologação, o coordenador garante:
+
+1. `openspec validate <change> --strict` passando;
+2. compilação do Reflex sem erros novos;
+3. testes, E2E, regressões e auditorias previstos em `tasks.md` executados com evidência, ou registrados como não executados com motivo e risco;
+4. revisão final do Codex sem achados bloqueantes em aberto;
+5. `git status` e `git diff --stat` restritos ao escopo da Change.
+
+O pacote de homologação apresentado ao usuário contém: resumo da Change, evidências dos testes, achados da revisão e como foram tratados, riscos remanescentes, lista de arquivos e commits planejados.
+
+Respostas aceitas:
+
+- `AJUSTAR` (com a descrição do ajuste): corrigir, repetir os testes afetados, submeter a nova revisão do Codex e solicitar nova homologação.
+- `CONCLUÍDA`: arquivar a Change (com sync das specs) e realizar os commits locais (§11). Nada além disso.
+
+Qualquer outra resposta, ou ausência de resposta, não constitui aprovação.
+
+## 16. Frontend original de referência
+
+O frontend original está em `C:\frontend-costguard`. Ele contém o design que será incorporado integralmente ao projeto principal `C:\projetoImpacta`.
+
+- Claude Code e Codex podem consultar toda a pasta original.
+- A pasta original é somente leitura: não modificar, não executar comandos que gerem arquivos nela e não realizar operações Git nela.
+- A implementação definitiva ocorre em `C:\projetoImpacta`, adaptando o design à arquitetura Reflex + Xano (§3).
+- Dados mockados, fixtures e valores fictícios do frontend original não devem ser transportados para produção: os dados exibidos devem vir do Xano.
+- Componentes visuais (layout, estilos, componentes de página) podem ser reutilizados e adaptados. O OpenSpec organiza as entregas e homologações, mas não impede essa reutilização.
+- A reutilização não dispensa as regras do projeto: segurança, autorização no backend, escopo da Change atual e verificação (§9).
+
+## 17. Autonomia durante a implementação
+
+O objetivo é entregar ao usuário cada Change implementada, revisada e pronta para homologação funcional, sem pedir aprovação a cada pequena correção, diagnóstico ou teste.
+
+### O que o coordenador faz sem pedir aprovação
+
+Dentro do escopo de uma Change cujos artefatos já foram revisados, o Claude Code pode, sem interromper o usuário:
+
+- coordenar o Orca e acionar o Codex como revisor, além de ferramentas especializadas necessárias, mantendo um único executor de escrita e publicação (§14);
+- investigar e corrigir defeitos técnicos da implementação;
+- fazer publicações técnicas e temporárias no Xano, exclusivamente dos objetos da Change, sempre com dry-run filtrado, conferência de escopo e cópia da versão anterior para recuperação;
+- corrigir achados de revisão que não mudem requisitos de negócio, arquitetura ou escopo funcional;
+- atualizar os artefatos OpenSpec da Change (proposal, design, specs, tasks) para refletir correções técnicas, evidências e estratégias de verificação, registrando o motivo;
+- executar testes, auditorias e regressões que não gravem dados reais;
+- repetir o ciclo implementação → revisão do Codex → correção até não haver achados bloqueantes.
+
+### O que continua exigindo consulta ao usuário
+
+- alterar arquitetura, requisitos de negócio ou escopo funcional;
+- modificar dados reais, inclusive para criar cenários de teste;
+- publicar objetos Xano fora da Change;
+- operações Git destrutivas ou que descartem alterações existentes;
+- `git push`, abrir Pull Request, merge na `main` (autorização específica, §11);
+- arquivar a Change ou fazer commits antes da homologação `CONCLUÍDA` (§15);
+- uso de Kimi ou alteração do Kiro, de `.kiro/`, de `openspec/config.yaml` ou de `C:\frontend-costguard`.
+
+Quando um achado só puder ser resolvido com uma dessas ações, o coordenador continua o restante do trabalho e apresenta a decisão pendente na entrega para homologação, ou interrompe se ela bloquear todo o progresso.
+
+### Entrega para homologação
+
+Ao concluir a implementação e as validações, o coordenador para e apresenta:
+
+- resumo do que foi implementado;
+- arquivos e endpoints alterados;
+- resultados dos testes e da revisão do Codex;
+- pendências e riscos remanescentes;
+- endereço e instruções para o usuário testar a aplicação;
+- critérios objetivos de homologação.
+
+A partir daí vale o protocolo de §15: `AJUSTAR` reabre o ciclo; `CONCLUÍDA` autoriza o archive e os commits locais (§11). PR, push e merge exigem autorização específica posterior.

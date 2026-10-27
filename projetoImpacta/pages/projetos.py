@@ -2,7 +2,9 @@
 
 Lista projetos do backend (api_group `app`). Controles de criar/editar/desativar
 só aparecem para admin (ocultação é UX; a autorização real é no backend).
-Não exibe custo consumido nem percentual de orçamento (não existem no backend).
+Cada card mostra o consumo MTD do orçamento mensal, no layout do card do
+frontend de referência (`_projeto_card`); valores, percentual e faixa vêm
+prontos do backend (`GET /projetos-resumo-consumo-mtd`).
 """
 
 import reflex as rx
@@ -13,8 +15,8 @@ from ..state import AuthState
 from .projetos_state import Projeto, ProjetosState
 
 
-def _moeda(valor: rx.Var[float]) -> rx.Var[str]:
-    return "US$ " + valor.to_string()
+def _texto_condicional(texto: rx.Var[str], **estilo) -> rx.Component:
+    return rx.cond(texto != "", rx.text(texto, **estilo), rx.fragment())
 
 
 def _status_badge(status: rx.Var[str]) -> rx.Component:
@@ -41,8 +43,48 @@ def _card(projeto: Projeto) -> rx.Component:
                 align="center",
             ),
             rx.box(
-                rx.text("ORÇAMENTO MENSAL", font_size="11px", font_weight="600", color=t.TEXT_MED, letter_spacing="0.05em"),
-                rx.text(_moeda(projeto["budget"]), font_size="28px", font_weight="700", color=t.TEXT_HIGH),
+                rx.text(
+                    "Custo classificado (MTD)",
+                    font_size="11px",
+                    font_weight="600",
+                    color=t.TEXT_MED,
+                    letter_spacing="0.05em",
+                    text_transform="uppercase",
+                ),
+                _texto_condicional(projeto["custo_texto"], font_size="28px", font_weight="700", color=t.TEXT_HIGH),
+                _texto_condicional(projeto["custo_nota"], font_size="13px", color=t.TEXT_MED, margin_top="4px"),
+                _texto_condicional(projeto["ultima_data_texto"], font_size="12px", color=t.TEXT_MED, margin_top="4px"),
+                margin_top="16px",
+            ),
+            rx.vstack(
+                rx.hstack(
+                    rx.text(projeto["orcamento_texto"], font_size="12px", color=t.TEXT_MED),
+                    rx.spacer(),
+                    rx.cond(
+                        projeto["mostra_consumo"],
+                        rx.hstack(
+                            rx.badge(projeto["faixa_rotulo"], color_scheme=projeto["faixa_cor"], variant="soft", size="1"),
+                            rx.text(projeto["percentual_texto"], font_size="12px", color=t.TEXT_HIGH, font_weight="600"),
+                            spacing="2",
+                            align="center",
+                        ),
+                        rx.fragment(),
+                    ),
+                    width="100%",
+                    align="center",
+                ),
+                rx.cond(
+                    projeto["mostra_consumo"],
+                    rx.progress(
+                        value=projeto["barra_valor"],
+                        color_scheme=projeto["faixa_cor"],
+                        height="6px",
+                        border_radius="9999px",
+                        width="100%",
+                    ),
+                    rx.fragment(),
+                ),
+                width="100%",
                 margin_top="16px",
             ),
             rx.cond(
@@ -193,6 +235,11 @@ def _conteudo() -> rx.Component:
             rx.cond(
                 ProjetosState.error_message != "",
                 rx.callout(ProjetosState.error_message, color_scheme="red", size="1", width="100%"),
+                rx.fragment(),
+            ),
+            rx.cond(
+                ProjetosState.aviso_consumo != "",
+                rx.callout(ProjetosState.aviso_consumo, color_scheme="amber", size="1", width="100%"),
                 rx.fragment(),
             ),
             rx.cond(
