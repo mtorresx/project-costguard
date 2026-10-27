@@ -6,11 +6,11 @@ Fornecer, em uma única leitura, o consumo do orçamento mensal de todos os proj
 
 ### Requirement: Endpoint de resumo de consumo MTD
 
-O sistema SHALL oferecer `GET /projetos/resumo-consumo-mtd` a qualquer usuário autenticado, sem exigir role admin. A leitura MUST NOT gravar, alterar ou remover registros e MUST NOT disparar coleta ou classificação. Sem token válido, o sistema SHALL responder HTTP 401. O endpoint MUST NOT aceitar parâmetros de intervalo nesta versão. Os endpoints existentes, incluindo `GET /projetos`, MUST NOT ter seu contrato alterado.
+O sistema SHALL oferecer `GET /projetos-resumo-consumo-mtd` a qualquer usuário autenticado, sem exigir role admin. A leitura MUST NOT gravar, alterar ou remover registros e MUST NOT disparar coleta ou classificação. Sem token válido, o sistema SHALL responder HTTP 401. O endpoint MUST NOT aceitar parâmetros de intervalo nesta versão. Os endpoints existentes, incluindo `GET /projetos`, MUST NOT ter seu contrato alterado.
 
 #### Scenario: Usuário admin consulta
 
-- **WHEN** um usuário autenticado com role admin chama `GET /projetos/resumo-consumo-mtd`
+- **WHEN** um usuário autenticado com role admin chama `GET /projetos-resumo-consumo-mtd`
 - **THEN** o backend responde HTTP 200 com o resumo de consumo de todos os projetos
 
 #### Scenario: Usuário leitura consulta

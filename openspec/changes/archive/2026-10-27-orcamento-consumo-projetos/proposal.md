@@ -6,7 +6,7 @@ Esta change traz o consumo MTD real para os cards de `/projetos`, preservando o 
 
 ## O que muda
 
-- **Backend (Xano):** novo endpoint `GET /projetos/resumo-consumo-mtd`, somente leitura, para qualquer usuário autenticado. Retorna, em uma única chamada, todos os dados necessários aos cards: dados do projeto, custo classificado no mês corrente, moeda, última data com custo, percentual do orçamento e faixa de consumo.
+- **Backend (Xano):** novo endpoint `GET /projetos-resumo-consumo-mtd`, somente leitura, para qualquer usuário autenticado. Retorna, em uma única chamada, todos os dados necessários aos cards: dados do projeto, custo classificado no mês corrente, moeda, última data com custo, percentual do orçamento e faixa de consumo.
 - **Fonte do consumo:** a tabela `custos_equipe`, com o mesmo critério de `total_projeto` de `GET /projetos/{id}/custos-equipe` (todas as equipes mais "Sem responsável"). A comparação feita com os dados reais em 2026-10-26 (projetos 4 e 10, janela 2026-10-01 a 2026-10-27) confirmou que `custos_equipe` e o endpoint de detalhe coincidem e que `custos_projeto` difere apenas por arredondamento (até 0,00002 por dia).
 - **Janela MTD:** calculada pelo backend em `America/Sao_Paulo`: do primeiro dia do mês até amanhã (exclusivo), a mesma regra do detalhamento.
 - **Faixas de consumo** (definidas pelo domínio): `< 70%` normal, `>= 70% e < 90%` atenção, `>= 90% e < 100%` crítico, `>= 100%` estourado. A faixa é calculada sobre o valor bruto, nunca sobre o valor arredondado.
@@ -19,7 +19,7 @@ Esta change traz o consumo MTD real para os cards de `/projetos`, preservando o 
 
 ### New Capabilities
 
-- `consumo-projetos`: endpoint agregado `GET /projetos/resumo-consumo-mtd` com o consumo MTD de todos os projetos, a partir de `custos_equipe`, com regras de janela, moeda, arredondamento, faixa e estados de custo.
+- `consumo-projetos`: endpoint agregado `GET /projetos-resumo-consumo-mtd` com o consumo MTD de todos os projetos, a partir de `custos_equipe`, com regras de janela, moeda, arredondamento, faixa e estados de custo.
 - `frontend-consumo-projetos`: apresentação do consumo MTD nos cards de `/projetos`, com faixas coloridas, estados explícitos e comportamento quando o endpoint de consumo falha.
 
 ### Modified Capabilities

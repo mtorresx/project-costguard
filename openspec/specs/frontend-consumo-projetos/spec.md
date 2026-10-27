@@ -1,17 +1,18 @@
-## Purpose
+# frontend-consumo-projetos Specification
 
+## Purpose
 Exibir nos cards da listagem `/projetos` o consumo real do orçamento mensal no mês corrente, com faixas de consumo e estados explícitos, preservando o visual do frontend de referência e usando somente os dados calculados pelo backend.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Carregamento da listagem com consumo
 
-Ao abrir `/projetos`, o frontend SHALL obter os projetos e o consumo em uma única chamada a `GET /projetos/resumo-consumo-mtd`, com o token da sessão. O frontend MUST NOT chamar `GET /projetos/{id}/custos-equipe` por projeto na listagem. Em HTTP 401, o frontend SHALL aplicar o tratamento central de sessão já existente. O frontend MUST NOT recalcular percentual nem faixa: SHALL usar `percentual_usado` e `faixa` retornados pelo backend.
+Ao abrir `/projetos`, o frontend SHALL obter os projetos e o consumo em uma única chamada a `GET /projetos-resumo-consumo-mtd`, com o token da sessão. O frontend MUST NOT chamar `GET /projetos/{id}/custos-equipe` por projeto na listagem. Em HTTP 401, o frontend SHALL aplicar o tratamento central de sessão já existente. O frontend MUST NOT recalcular percentual nem faixa: SHALL usar `percentual_usado` e `faixa` retornados pelo backend.
 
 #### Scenario: Uma chamada para a listagem
 
 - **WHEN** um usuário autenticado abre `/projetos`
-- **THEN** o frontend faz uma única chamada a `GET /projetos/resumo-consumo-mtd` para montar os cards
+- **THEN** o frontend faz uma única chamada a `GET /projetos-resumo-consumo-mtd` para montar os cards
 - **AND** não faz chamadas a `custos-equipe` por projeto
 
 #### Scenario: Sessão expirada
@@ -113,18 +114,24 @@ Projetos inativos SHALL continuar na listagem, com indicação de status inativo
 
 ### Requirement: Endpoint de consumo indisponível
 
-Quando `GET /projetos/resumo-consumo-mtd` falhar por erro de rede ou status diferente de 200 e 401, o frontend SHALL exibir a mensagem "Não foi possível carregar o consumo dos projetos." e SHALL carregar a listagem por `GET /projetos`. Nesse modo, cada card SHALL mostrar "Consumo indisponível" no lugar do custo, sem valor, percentual nem barra, e os controles de criar, editar e desativar e a navegação ao detalhamento SHALL continuar funcionando. Se `GET /projetos` também falhar, o frontend SHALL exibir a mensagem de erro de carregamento de projetos já existente. O frontend MUST NOT exibir zero como substituto do consumo indisponível.
+Quando `GET /projetos-resumo-consumo-mtd` falhar por erro de rede, status diferente de 200 e 401, ou responder HTTP 200 com corpo fora do contrato do resumo (tipos ou combinações de campos diferentes dos definidos na spec `consumo-projetos`), o frontend SHALL exibir a mensagem "Não foi possível carregar o consumo dos projetos." e SHALL carregar a listagem por `GET /projetos`. Nesse modo, cada card SHALL mostrar "Consumo indisponível" no lugar do custo, sem valor, percentual nem barra, e os controles de criar, editar e desativar e a navegação ao detalhamento SHALL continuar funcionando. Se `GET /projetos` também falhar, o frontend SHALL exibir a mensagem de erro de carregamento de projetos já existente. O frontend MUST NOT exibir zero como substituto do consumo indisponível.
 
 #### Scenario: Consumo indisponível com listagem disponível
 
-- **WHEN** `GET /projetos/resumo-consumo-mtd` responde HTTP 500 e `GET /projetos` responde HTTP 200
+- **WHEN** `GET /projetos-resumo-consumo-mtd` responde HTTP 500 e `GET /projetos` responde HTTP 200
 - **THEN** a página mostra "Não foi possível carregar o consumo dos projetos." e os cards com "Consumo indisponível"
 - **AND** os controles de admin e a navegação ao detalhamento continuam disponíveis
 
+#### Scenario: Resposta fora do contrato
+
+- **WHEN** `GET /projetos-resumo-consumo-mtd` responde HTTP 200 com um item cujo `custo_mtd` não é numérico, e `GET /projetos` responde HTTP 200
+- **THEN** a página mostra "Não foi possível carregar o consumo dos projetos." e todos os cards com "Consumo indisponível"
+- **AND** nenhum valor é exibido como consumo, nem zero
+
 #### Scenario: Ambos indisponíveis
 
-- **WHEN** `GET /projetos/resumo-consumo-mtd` e `GET /projetos` falham
-- **THEN** a página mostra "Não foi possível carregar os projetos." e nenhum card
+- **WHEN** `GET /projetos-resumo-consumo-mtd` e `GET /projetos` falham
+- **THEN** a página mostra "Não foi possível carregar os projetos." e nenhum card, inclusive quando havia cards de uma carga anterior
 
 ### Requirement: Preservação da listagem existente
 
@@ -142,5 +149,5 @@ A change MUST preservar o comportamento atual de `/projetos`: controles de criar
 
 #### Scenario: Card igual ao detalhe
 
-- **WHEN** o usuário abre o detalhamento a partir de um card no mesmo dia
+- **WHEN** o usuário abre o detalhamento a partir de um card no mesmo dia, com a mesma janela MTD e sem classificação de novos custos entre as duas leituras
 - **THEN** o "Custo classificado (MTD)" do detalhe é igual ao valor do card
