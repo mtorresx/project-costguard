@@ -1,8 +1,8 @@
 ## Por quê
 
-A página `/projetos` lista os projetos com o orçamento, mas não mostra de onde vem o gasto do mês. O frontend de referência (`C:\frontend-costguard`, branch `development-fernando-alertas`) já tem a tela de detalhamento em `/projetos/[projeto_id]`, desenhada com custo por equipe, orçamento e inventário de recursos. Hoje essa tela depende de `GET /projetos/{id}/detalhe`, que não existe no backend, então suas seções aparecem vazias.
+A página `/projetos` lista os projetos com o orçamento, mas não mostra de onde vem o gasto do mês. O frontend de referência (na branch de desenvolvimento) já tem a tela de detalhamento em `/projetos/[projeto_id]`, desenhada com custo por equipe, orçamento e inventário de recursos. Hoje essa tela depende de `GET /projetos/{id}/detalhe`, que não existe no backend, então suas seções aparecem vazias.
 
-Esta change porta a tela de detalhamento para `C:\projetoImpacta` e a liga aos endpoints reais já existentes: `GET /projetos/{id}`, `GET /projetos/{id}/custos-equipe`, `GET /projetos/{id}/recursos` e `GET /projetos/{id}/equipes`. O objetivo não é desenhar uma tela nova. É preservar o design da referência e substituir apenas o que não tem dado real.
+Esta change porta a tela de detalhamento para este repositório e a liga aos endpoints reais já existentes: `GET /projetos/{id}`, `GET /projetos/{id}/custos-equipe`, `GET /projetos/{id}/recursos` e `GET /projetos/{id}/equipes`. O objetivo não é desenhar uma tela nova. É preservar o design da referência e substituir apenas o que não tem dado real.
 
 ## O que muda
 
@@ -28,11 +28,11 @@ Esta change porta a tela de detalhamento para `C:\projetoImpacta` e a liga aos e
 - **Qualquer backend novo, endpoint novo ou alteração em XanoScript**.
 - **Botão "Sincronizar" ou "Classificar custos" pela UI**.
 - **Alertas, regras de alerta e o follow-up de login inativo (HTTP 200 em vez de 401)**.
-- **Alterações em `C:\frontend-costguard`**: é somente referência visual.
+- **Alterações no frontend de referência**: é somente referência visual.
 
 ## Impacto
 
 - **Frontend (Reflex, `projetoImpacta/`)**: novo módulo de página e de estado para o detalhamento, nova rota em `projetoImpacta.py`, ajuste no card de `pages/projetos.py` para navegar ao detalhamento sem disparar as ações de editar e desativar.
 - **Backend (Xano)**: nenhum. Só leitura, sem escrita.
-- **Dependências**: `httpx`, `config.get_xano_app_base_url()` e `AuthState`, como no padrão atual. Uma dependência nova é necessária: `tzdata`, incluído em `requirements.txt`, porque o `zoneinfo` do Windows não encontra `America/Sao_Paulo` sem esse pacote. A inclusão depende de aprovação, conforme o AGENTS.md.
+- **Dependências**: `httpx`, `config.get_xano_app_base_url()` e `AuthState`, como no padrão atual. Uma dependência nova é necessária: `tzdata`, incluído em `requirements.txt`, porque o `zoneinfo` do Windows não encontra `America/Sao_Paulo` sem esse pacote. A inclusão depende de aprovação, conforme as regras operacionais do projeto.
 - **Specs**: nova capability `frontend-detalhamento-projeto`. Não altera as capabilities consolidadas (`projetos`, `equipes`, `inventario-recursos`, `custos-equipe`).

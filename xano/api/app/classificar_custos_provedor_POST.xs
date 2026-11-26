@@ -25,7 +25,7 @@ query "provedores/{id}/classificar-custos" verb=POST {
       error = "Token inválido ou expirado"
     }
 
-    precondition ($usuario_logado.role == "admin") {
+    precondition ($usuario_logado.status == "ativo" && $usuario_logado.role == "admin") {
       error_type = "accessdenied"
       error = "Acesso negado"
     }
@@ -77,56 +77,12 @@ query "provedores/{id}/classificar-custos" verb=POST {
     }
 
     // ============================================================
-    // B.1) Resolução do destino (AWS real x AWS Mock) e dos componentes da
-    //      assinatura dependentes do destino. UMA única implementação SigV4
-    //      (no loop de paginação): apenas host, canonical URI e URL mudam
-    //      conforme usar_mock. usar_mock=false NÃO lê nem depende de MOCK_BASE_URL.
+    // B.1) Destino e componentes da assinatura SigV4 (AWS Cost Explorer,
+    //      service=ce, region=us-east-1).
     // ============================================================
-    var $eh_mock { value = ($provedor.usar_mock == true) }
-
-    // Defaults = AWS real (comportamento atual, inalterado).
     var $sig_host { value = "ce.us-east-1.amazonaws.com" }
     var $canonical_uri { value = "/" }
     var $sig_endpoint { value = "https://ce.us-east-1.amazonaws.com/" }
-
-    conditional {
-      if ($eh_mock == true) {
-        // MOCK_BASE_URL é obrigatória apenas no caminho Mock.
-        precondition ($env.MOCK_BASE_URL != null && $env.MOCK_BASE_URL != "") {
-          error_type = "inputerror"
-          error = "Ambiente Mock não configurado (MOCK_BASE_URL ausente)"
-        }
-        // Normaliza removendo UMA barra final (se houver) para evitar barra dupla
-        // (//aws/...). Sem regex: compara o último caractere via substr.
-        var $mock_base_raw { value = $env.MOCK_BASE_URL }
-        var $mock_base_len { value = $mock_base_raw|strlen }
-        var $mock_base_ultimo { value = $mock_base_raw|substr:($mock_base_len - 1) }
-        var $mock_base_norm { value = $mock_base_raw }
-        conditional {
-          if ($mock_base_ultimo == "/") {
-            var.update $mock_base_norm { value = $mock_base_raw|substr:0:($mock_base_len - 1) }
-          }
-        }
-        // Host derivado da base (sem esquema) para assinatura e header Host.
-        // Sem regex: remove o prefixo de esquema conhecido via substr.
-        var $mock_host { value = $mock_base_norm }
-        conditional {
-          if ($mock_base_norm|starts_with:"https://") {
-            var.update $mock_host { value = $mock_base_norm|substr:8 }
-          }
-          else {
-            conditional {
-              if ($mock_base_norm|starts_with:"http://") {
-                var.update $mock_host { value = $mock_base_norm|substr:7 }
-              }
-            }
-          }
-        }
-        var.update $sig_host { value = $mock_host }
-        var.update $canonical_uri { value = "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
-        var.update $sig_endpoint { value = $mock_base_norm ~ "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
-      }
-    }
 
     // Tag Key de alocação configurada no provedor (Key padrão/recomendada: "PRJ").
     // A Key identifica a finalidade da tag; o Value é diretamente projetos.codigo.
@@ -157,7 +113,7 @@ query "provedores/{id}/classificar-custos" verb=POST {
     }
 
     // Constantes SigV4 do Cost Explorer (service=ce, region=us-east-1).
-    // $sig_host, $canonical_uri e $sig_endpoint já resolvidos em B.1 (real x mock).
+    // $sig_host, $canonical_uri e $sig_endpoint definidos em B.1.
     var $sig_service { value = "ce" }
     var $sig_region  { value = "us-east-1" }
     var $amz_target  { value = "AWSInsightsIndexService.GetCostAndUsage" }

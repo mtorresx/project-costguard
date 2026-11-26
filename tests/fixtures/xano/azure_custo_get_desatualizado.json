@@ -1,0 +1,15 @@
+{
+  "provedor": "azure",
+  "configurado": true,
+  "status": "desatualizado",
+  "nao_alocado": true,
+  "custo_mes_total": null,
+  "moeda": null,
+  "atualizado_em": null,
+  "mes_referencia": "2026-10",
+  "erro_resumo": "O último valor guardado é de um mês anterior. Sincronize para ler o mês atual.",
+  "proxima_leitura_em": null,
+  "origem": "servidor",
+  "apelido": "Azure",
+  "tenant_final": null
+}

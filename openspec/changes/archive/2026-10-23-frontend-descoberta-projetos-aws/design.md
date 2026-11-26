@@ -2,7 +2,7 @@
 
 Ver `proposal.md` — Why. Estado atual relevante (lido na análise):
 
-- Frontend Reflex do projeto (`c:\projetoImpacta\projetoImpacta`): `AuthState` (token em
+- Frontend Reflex do projeto (`projetoImpacta/`): `AuthState` (token em
   `rx.SessionStorage`, `is_admin`, `handle_unauthenticated` para 401), `config.get_xano_app_base_url()`,
   `components/layout.app_shell`, `components/pill.pill`, `components/tabela.th`, `theme` (tokens
   `PRIMARY`, `SURFACE`, `TEXT_*`, etc.). Reflex `0.9.12`.
@@ -15,7 +15,7 @@ Ver `proposal.md` — Why. Estado atual relevante (lido na análise):
   `POST /provedores/{id}/importar-projetos` (body `{ codigos: [...] }`) →
   `{ provedor_id, criados: [{codigo, projeto_id}], ignorados: [{codigo, motivo, projeto_id}] }`.
 
-Sobre `C:\frontend-costguard`: é um protótipo visual anterior, com **contratos divergentes** do
+Sobre o frontend de referência: é um protótipo visual anterior, com **contratos divergentes** do
 backend atual (multi-cloud, `credencial`/`credencial_id`, `sincronizar`, `DELETE`, `custo_mensal_usd`,
 cards com `PRJ_<codigo>`). Ele é usado **apenas como referência de linguagem visual/UX**
 (espaçamento, tipografia, `rx.dialog` como "sheet"/modal, `pill` de status, `th` de tabela,
@@ -35,7 +35,7 @@ projeto.
 **Non-Goals (nível de design):**
 
 - Nenhuma alteração de backend, schema, auth, classificação, coleta ou Mock.
-- Nenhuma página nova; nenhuma edição em `C:\frontend-costguard`.
+- Nenhuma página nova; nenhuma edição no frontend de referência.
 - Sem edição de budget no fluxo (projetos nascem budget 0 no backend).
 
 ## Decisions

@@ -1,0 +1,26 @@
+{
+  "tenant_id": [
+    "",
+    "contoso.onmicrosoft.com",
+    "../../etc/passwd",
+    "00000000-0000-0000-0000-000000000000/../x",
+    "00000000-0000-0000-0000-000000000000?x=1",
+    "00000000-0000-0000-0000-000000000000#x",
+    "00000000-0000-0000-0000-000000000000\nX",
+    "00000000-0000-0000-0000-00000000000g",
+    "00000000000000000000000000000000",
+    "00000000-0000-0000-0000-0000000000000",
+    "{00000000-0000-0000-0000-000000000000}",
+    "%2e%2e00-0000-0000-0000-000000000000"
+  ],
+  "client_secret": [
+    "",
+    "curto",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "tem espaco no meio 000",
+    "com\ttab-0000000",
+    "com\nquebra-0000",
+    "acentuação-ç-0000",
+    "ctrl\u0001-0000000"
+  ]
+}

@@ -1,6 +1,6 @@
 ## 1. Análise/adaptação da UI (referência visual)
 
-- [x] 1.1 Mapear os padrões visuais reutilizáveis já presentes no projeto (`app_shell`, `rx.dialog`, `pill`, `th`, tokens de `theme`) e confirmar que cobrem a UI do fluxo (modal, tabela/lista, badges, botões, loading). Verificação: lista de componentes/padrões a reutilizar registrada; nenhum novo componente visual necessário além dos existentes. NÃO alterar `C:\frontend-costguard`.
+- [x] 1.1 Mapear os padrões visuais reutilizáveis já presentes no projeto (`app_shell`, `rx.dialog`, `pill`, `th`, tokens de `theme`) e confirmar que cobrem a UI do fluxo (modal, tabela/lista, badges, botões, loading). Verificação: lista de componentes/padrões a reutilizar registrada; nenhum novo componente visual necessário além dos existentes. NÃO alterar o frontend de referência.
 
 ## 2. Estado Reflex
 

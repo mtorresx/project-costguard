@@ -1,6 +1,6 @@
 ## Contexto
 
-A referência visual está em `C:\frontend-costguard\costguard\pages\projetos.py`: a função `projeto_detalhe_page()` (linha 935), o estado `ProjetosState` (linha 145) e os componentes auxiliares `_barra_equipe`, `_grupo_recursos`, `_kpi_card_detalhe`, `_breadcrumb_detalhe` e `_vazio`. A rota é registrada em `C:\frontend-costguard\costguard\costguard.py` (linhas 36–39) como `/projetos/[projeto_id]`.
+A referência visual está no frontend de referência (pages/projetos.py): a função `projeto_detalhe_page()` (linha 935), o estado `ProjetosState` (linha 145) e os componentes auxiliares `_barra_equipe`, `_grupo_recursos`, `_kpi_card_detalhe`, `_breadcrumb_detalhe` e `_vazio`. A rota é registrada no frontend de referência (costguard.py, linhas 36–39) como `/projetos/[projeto_id]`.
 
 Fatos confirmados no código:
 

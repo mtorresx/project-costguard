@@ -4,7 +4,7 @@ Segue o padrão do `ProjetosState`/`AuthState`: envia `Authorization: Bearer
 <token>` e, em HTTP 401, delega ao tratamento central de sessão
 (`AuthState.handle_unauthenticated`).
 
-Segurança do segredo da credencial AWS (ver change provedor-aws-base):
+Segurança do segredo da credencial AWS:
 - o `secret_access_key` só é mantido no State o tempo necessário para a
   submissão e é limpo após o envio;
 - o segredo salvo nunca é retornado pelo backend nem reexibido na interface;
@@ -13,13 +13,34 @@ Segurança do segredo da credencial AWS (ver change provedor-aws-base):
 
 from __future__ import annotations
 
+import re
 from typing import TypedDict
 
 import httpx
 import reflex as rx
 
+from ..components.mensagens import sucesso
+
+from ..formatadores import mascarar_conta_aws
+from ..api import cliente_xano, requisitar
 from ..config import get_xano_app_base_url
 from ..state import AuthState
+from .azure_state import ROTA_CONEXAO, AzureState
+
+
+CAMPOS_AZURE = (
+    ("tenant_id", "Tenant ID"),
+    ("client_id", "Client ID"),
+    ("client_secret", "Client Secret"),
+    ("subscription_id", "Subscription ID"),
+)
+
+
+def _erro_conexao_azure(mensagem, credenciais: dict) -> str:
+    if not isinstance(mensagem, str) or not mensagem.strip():
+        return "Não foi possível conectar a assinatura Azure."
+    valores = sorted({v.strip() for v in credenciais.values() if v.strip()}, key=len, reverse=True)
+    return re.sub("|".join(map(re.escape, valores)), "[oculto]", mensagem, flags=re.IGNORECASE)
 
 
 class Provedor(TypedDict):
@@ -27,9 +48,17 @@ class Provedor(TypedDict):
     apelido: str
     tipo: str
     identificador_conta: str
+    conta_mascarada: str
     tipo_credencial: str
     status: str
-    usar_mock: bool
+    tag_alocacao_projeto: str
+    # Estado do inventário (GET /sincronizacao/estado); vazio quando não se aplica.
+    sinc_texto: str
+    sinc_erro: str
+    sinc_ultima_boa: str
+
+
+TAG_PROJETO_PADRAO = "PRJ"
 
 
 def _normalizar(bruto: dict) -> Provedor:
@@ -38,11 +67,51 @@ def _normalizar(bruto: dict) -> Provedor:
         "apelido": bruto.get("apelido") or "",
         "tipo": bruto.get("tipo") or "aws",
         "identificador_conta": bruto.get("identificador_conta") or "",
+        "conta_mascarada": mascarar_conta_aws(str(bruto.get("identificador_conta") or "")),
         "tipo_credencial": bruto.get("tipo_credencial") or "aws_access_key",
         "status": bruto.get("status") or "pendente",
-        # Metadado (não é segredo). Default False preserva o fluxo AWS real.
-        "usar_mock": bool(bruto.get("usar_mock") or False),
+        "tag_alocacao_projeto": (bruto.get("tag_alocacao_projeto") or "").strip() or TAG_PROJETO_PADRAO,
+        "sinc_texto": "",
+        "sinc_erro": "",
+        "sinc_ultima_boa": "",
     }
+
+
+def com_estado(provedores: list[Provedor], corpo: object) -> list[Provedor]:
+    """Provedores com os textos de `/sincronizacao/estado` (provedor fora da resposta fica sem texto)."""
+    from ..sincronizacao_auto import estado_por_provedor
+
+    estados = estado_por_provedor(corpo)
+    saida: list[Provedor] = []
+    for p in provedores:
+        e = estados.get(p["id"], {})
+        saida.append({
+            **p,
+            "sinc_texto": e.get("texto", ""),
+            "sinc_erro": e.get("erro", ""),
+            "sinc_ultima_boa": e.get("ultima_boa", ""),
+        })
+    return saida
+
+
+def mensagem_teste_conexao(corpo: object) -> str:
+    """Motivo da falha do teste de conexão; vazio quando conectou.
+
+    O backend responde HTTP 200 também quando a credencial é recusada: o
+    resultado vem em `conectado`, com `mensagem` e um `diagnostico` sanitizado.
+    """
+    if not isinstance(corpo, dict) or corpo.get("conectado") is True:
+        return ""
+    texto = corpo.get("mensagem")
+    texto = texto.strip() if isinstance(texto, str) and texto.strip() else "Falha no teste de conexão."
+    diag = corpo.get("diagnostico")
+    if isinstance(diag, dict):
+        detalhes = [str(diag[c]) for c in ("error_code", "error_msg") if diag.get(c)]
+        if diag.get("http_status"):
+            detalhes.append(f"HTTP {diag['http_status']}")
+        if detalhes:
+            texto = f"{texto} ({' — '.join(detalhes)})"
+    return texto
 
 
 class ProvedoresState(rx.State):
@@ -54,18 +123,21 @@ class ProvedoresState(rx.State):
 
     # id do provedor cujo teste de conexão está em andamento (0 = nenhum).
     testando_id: int = 0
+    # Motivo da falha do último teste de conexão (sobrevive à recarga da lista).
+    falha_teste: str = ""
 
     # Formulário (criar/editar).
     form_aberto: bool = False
     form_modo: str = "criar"  # "criar" | "editar"
+    form_provedor: str = "AWS"
+    versao_form_azure: int = 0
     form_id: int = 0
     form_apelido: str = ""
     form_identificador_conta: str = ""
     form_access_key_id: str = ""
     # Segredo: só preenchido pelo usuário para submissão; nunca vem do backend.
     form_secret_access_key: str = ""
-    # Característica opcional "Usar ambiente AWS Mock" (default desmarcado).
-    form_usar_mock: bool = False
+    form_tag_projeto: str = TAG_PROJETO_PADRAO
     form_error: str = ""
     form_loading: bool = False
 
@@ -73,19 +145,21 @@ class ProvedoresState(rx.State):
         return await self.get_state(AuthState)
 
     @rx.event
-    async def carregar(self):
+    async def carregar(self, ao_abrir: bool = True):
         """on_load: carrega a lista real do backend."""
         auth = await self._auth()
         if not auth.token:
             yield AuthState.handle_unauthenticated
             return
+        if ao_abrir:
+            yield rx.call_script("Intl.DateTimeFormat().resolvedOptions().timeZone", callback=AzureState.carregar)
 
         self.loading = True
         self.error_message = ""
         yield
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 resp = await client.get(
                     f"{get_xano_app_base_url()}/provedores",
                     headers={"Authorization": f"Bearer {auth.token}"},
@@ -108,24 +182,36 @@ class ProvedoresState(rx.State):
             dados = resp.json()
         except Exception:
             dados = []
-        self.provedores = [_normalizar(p) for p in dados if isinstance(p, dict)]
+        provedores = [
+            _normalizar(p) for p in dados
+            if isinstance(p, dict) and (p.get("tipo") or "aws") == "aws"
+        ]
+        # Estado do inventário por provedor. Se a leitura falhar, a lista aparece sem ele.
+        status_e, estado = await requisitar("GET", "/sincronizacao/estado", auth.token, forcar=True)
+        self.provedores = com_estado(provedores, estado) if status_e == 200 else provedores
         self.loading = False
 
     @rx.event
+    def aplicar_estado(self, corpo: dict):
+        """Atualiza só os textos de sincronização (consulta periódica), sem recarregar a lista."""
+        self.provedores = com_estado(self.provedores, corpo)
+
+    @rx.event
     def abrir_criar(self):
+        self.form_provedor = "AWS"
         self.form_modo = "criar"
         self.form_id = 0
         self.form_apelido = ""
         self.form_identificador_conta = ""
         self.form_access_key_id = ""
         self.form_secret_access_key = ""
-        # Checkbox começa desmarcado na criação (default AWS real).
-        self.form_usar_mock = False
+        self.form_tag_projeto = TAG_PROJETO_PADRAO
         self.form_error = ""
         self.form_aberto = True
 
     @rx.event
     def abrir_editar(self, provedor: Provedor):
+        self.form_provedor = "AWS"
         self.form_modo = "editar"
         self.form_id = provedor["id"]
         self.form_apelido = provedor["apelido"]
@@ -134,16 +220,76 @@ class ProvedoresState(rx.State):
         self.form_access_key_id = ""
         # O segredo salvo nunca é devolvido pelo backend: o campo começa vazio.
         self.form_secret_access_key = ""
-        # Reflete o valor salvo (metadado, não é segredo).
-        self.form_usar_mock = bool(provedor.get("usar_mock") or False)
+        self.form_tag_projeto = provedor.get("tag_alocacao_projeto") or TAG_PROJETO_PADRAO
         self.form_error = ""
         self.form_aberto = True
 
     @rx.event
+    def selecionar_provedor(self, valor: str):
+        if self.form_modo == "criar" and valor in ("AWS", "Azure"):
+            self.form_provedor = valor
+            self.form_error = ""
+            self.form_access_key_id = ""
+            self.form_secret_access_key = ""
+
+    @rx.event
     def fechar_form(self):
         self.form_aberto = False
+        self.form_error = ""
+        self.versao_form_azure += 1
         # Garante que nenhum segredo permaneça no State após fechar.
         self.form_secret_access_key = ""
+
+    @rx.event
+    def alterar_abertura(self, aberto: bool):
+        if not aberto:
+            self.fechar_form()
+
+    @rx.event
+    async def conectar_azure(self, form_data: dict):
+        # Inputs não controlados: as credenciais existem apenas no argumento deste envio.
+        credenciais = {campo: form_data.get(campo) for campo, _ in CAMPOS_AZURE}
+        apelido = form_data.get("apelido")
+        form_data.clear()
+        try:
+            auth = await self._auth()
+            if not auth.token:
+                yield AuthState.handle_unauthenticated
+                return
+            if (not auth.is_admin or self.form_loading or not self.form_aberto
+                    or self.form_modo != "criar" or self.form_provedor != "Azure"):
+                return
+            self.form_error = ""
+            self.versao_form_azure += 1
+            if not all(isinstance(v, str) and v.strip() for v in credenciais.values()):
+                self.form_error = "Preencha os quatro campos da conexão Azure."
+                return
+            self.form_loading = True
+            yield
+            try:
+                status, corpo = await requisitar("POST", ROTA_CONEXAO, auth.token, {
+                    **credenciais, "apelido": apelido.strip() if isinstance(apelido, str) and apelido.strip() else "Azure",
+                })
+            finally:
+                self.form_loading = False
+            if status == 401:
+                self.fechar_form()
+                yield AuthState.handle_unauthenticated
+                return
+            dados = corpo if isinstance(corpo, dict) else {}
+            if not (200 <= status < 300 and dados.get("conectado") is True):
+                self.form_error = _erro_conexao_azure(dados.get("message"), credenciais)
+                self.versao_form_azure += 1
+                return
+        finally:
+            credenciais.clear()
+        self.fechar_form()
+        azure = await self.get_state(AzureState)
+        azure._conexao_alterada()
+        azure.carregando = True
+        azure.conectado = False
+        yield sucesso("Conectado ao Azure")
+        yield AzureState.carregar
 
     @rx.event
     def set_form_apelido(self, v: str):
@@ -166,8 +312,8 @@ class ProvedoresState(rx.State):
         self.form_error = ""
 
     @rx.event
-    def set_form_usar_mock(self, v: bool):
-        self.form_usar_mock = bool(v)
+    def set_form_tag_projeto(self, v: str):
+        self.form_tag_projeto = v
         self.form_error = ""
 
     @rx.event
@@ -177,12 +323,18 @@ class ProvedoresState(rx.State):
         if not auth.token:
             return AuthState.handle_unauthenticated
 
+        if self.form_provedor != "AWS":
+            return
+
         # Validação leve no cliente (apenas UX; o backend é autoritativo).
         if not self.form_apelido.strip():
             self.form_error = "Informe o apelido do provedor."
             return
         if not self.form_identificador_conta.strip():
             self.form_error = "Informe o identificador da conta AWS."
+            return
+        if not self.form_tag_projeto.strip():
+            self.form_error = "Informe a Tag Key de projeto (padrão: PRJ)."
             return
         if self.form_modo == "criar":
             if not self.form_access_key_id.strip():
@@ -198,7 +350,7 @@ class ProvedoresState(rx.State):
         headers = {"Authorization": f"Bearer {auth.token}"}
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 if self.form_modo == "criar":
                     payload = {
                         "apelido": self.form_apelido.strip(),
@@ -206,14 +358,14 @@ class ProvedoresState(rx.State):
                         "identificador_conta": self.form_identificador_conta.strip(),
                         "aws_access_key_id": self.form_access_key_id.strip(),
                         "aws_secret_access_key": self.form_secret_access_key,
-                        "usar_mock": self.form_usar_mock,
+                        "tag_alocacao_projeto": self.form_tag_projeto.strip(),
                     }
                     resp = await client.post(f"{base}/provedores", json=payload, headers=headers)
                 else:
                     payload = {
                         "apelido": self.form_apelido.strip(),
                         "identificador_conta": self.form_identificador_conta.strip(),
-                        "usar_mock": self.form_usar_mock,
+                        "tag_alocacao_projeto": self.form_tag_projeto.strip(),
                     }
                     # Só envia o Access Key ID se o admin informou um novo valor
                     # (vazio = preservar o existente no backend).
@@ -240,7 +392,7 @@ class ProvedoresState(rx.State):
             return
 
         self.form_aberto = False
-        return ProvedoresState.carregar
+        return [sucesso("Provedor salvo."), ProvedoresState.carregar(False)]
 
     @rx.event
     async def desativar(self, provedor_id: int):
@@ -249,7 +401,7 @@ class ProvedoresState(rx.State):
         if not auth.token:
             return AuthState.handle_unauthenticated
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 resp = await client.post(
                     f"{get_xano_app_base_url()}/provedores/{provedor_id}/desativar",
                     headers={"Authorization": f"Bearer {auth.token}"},
@@ -262,40 +414,57 @@ class ProvedoresState(rx.State):
         if resp.status_code != 200:
             self.error_message = _mensagem_erro(resp)
             return
-        return ProvedoresState.carregar
+        return [sucesso("Provedor desativado."), ProvedoresState.carregar(False)]
 
-    @rx.event
+    @rx.event(background=True)
     async def testar_conexao(self, provedor_id: int):
-        """Testa a conexão AWS do provedor (admin) e recarrega para refletir o status."""
-        auth = await self._auth()
-        if not auth.token:
+        """Testa a conexão AWS do provedor (admin) e recarrega para refletir o status.
+
+        Em segundo plano (P2-3): o teste pode levar até 60 s sem segurar a aba.
+        """
+        async with self:
+            if self.testando_id:
+                return
+            token = (await self._auth()).token
+            if token:
+                self.testando_id = provedor_id
+                self.error_message = ""
+                self.falha_teste = ""
+        if not token:
             yield AuthState.handle_unauthenticated
             return
-
-        self.testando_id = provedor_id
-        self.error_message = ""
-        yield
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with cliente_xano(60) as client:
                 resp = await client.post(
                     f"{get_xano_app_base_url()}/provedores/{provedor_id}/testar-conexao",
-                    headers={"Authorization": f"Bearer {auth.token}"},
+                    headers={"Authorization": f"Bearer {token}"},
                 )
         except Exception:
-            self.testando_id = 0
-            self.error_message = "Não foi possível testar a conexão do provedor."
+            async with self:
+                self.testando_id = 0
+                self.error_message = "Não foi possível testar a conexão do provedor."
             return
 
-        self.testando_id = 0
+        async with self:
+            self.testando_id = 0
+            if resp.status_code == 200:
+                # HTTP 200 com `conectado: false` é falha: mostra o motivo.
+                try:
+                    corpo = resp.json()
+                    conectado = isinstance(corpo, dict) and corpo.get("conectado") is True
+                    self.falha_teste = "" if conectado else mensagem_teste_conexao(corpo) or "Falha no teste de conexão."
+                except ValueError:
+                    conectado = False
+                    self.falha_teste = "Falha no teste de conexão."
+            elif resp.status_code != 401:
+                self.error_message = _mensagem_erro(resp)
         if resp.status_code == 401:
             yield AuthState.handle_unauthenticated
-            return
-        if resp.status_code != 200:
-            self.error_message = _mensagem_erro(resp)
-            return
-
-        yield ProvedoresState.carregar
+        elif resp.status_code == 200:
+            if conectado:
+                yield sucesso("Conexão com a AWS confirmada.")
+            yield ProvedoresState.carregar(False)
 
 
 def _mensagem_erro(resp: httpx.Response) -> str:

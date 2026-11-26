@@ -11,12 +11,10 @@ query me verb=GET {
       field_value = $auth.id
     } as $usuario_atual
   
-    conditional {
-      if ($usuario_atual == null) {
-        return {
-          value = {erro: "Token inválido ou expirado"}
-        }
-      }
+    // Usuário inexistente ou desativado: sessão inválida (HTTP 401).
+    precondition ($usuario_atual != null && $usuario_atual.status == "ativo") {
+      error_type = "unauthorized"
+      error = "Token inválido ou expirado"
     }
   
     // Monta a resposta com os dados atuais do banco

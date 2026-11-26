@@ -25,7 +25,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
       error = "Token inválido ou expirado"
     }
 
-    precondition ($usuario_logado.role == "admin") {
+    precondition ($usuario_logado.status == "ativo" && $usuario_logado.role == "admin") {
       error_type = "accessdenied"
       error = "Acesso negado"
     }
@@ -64,11 +64,6 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     }
 
     // Tag Key de projeto é obrigatória.
-    precondition ($provedor.tag_alocacao_projeto != null && $provedor.tag_alocacao_projeto != "") {
-      error_type = "inputerror"
-      error = "Tag de alocação de projeto não configurada no provedor"
-    }
-
     // ============================================================
     // A.1) Intervalo (antes de qualquer chamada externa).
     //      Start inclusivo, End exclusivo. Padrão: últimos 30 dias até ontem.
@@ -94,7 +89,10 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     // A.2) Tag Keys: projeto (obrigatória) e equipe efetiva (fallback EQP
     //      apenas quando o campo do provedor é nulo/vazio).
     // ============================================================
-    var $tag_key_prj { value = $provedor.tag_alocacao_projeto }
+    // Fallback "PRJ" para provedores sem Tag Key de projeto gravada (mesma
+    // convenção do fallback "EQP" da equipe).
+    var $tag_key_prj_raw { value = ($provedor.tag_alocacao_projeto ?? "") }
+    var $tag_key_prj { value = (($tag_key_prj_raw|trim) != "") ? $tag_key_prj_raw : "PRJ" }
     var $tag_key_eqp_raw { value = ($provedor.tag_alocacao_equipe ?? "") }
     var $tag_key_eqp { value = (($tag_key_eqp_raw|trim) != "") ? $tag_key_eqp_raw : "EQP" }
 
@@ -105,48 +103,67 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     var $prefixo_eqp_len { value = $prefixo_eqp|strlen }
 
     // ============================================================
-    // B) Destino (AWS real x AWS Mock) e componentes da assinatura.
-    //    Mesmo padrão dos endpoints existentes. usar_mock=false NÃO lê
-    //    nem depende de MOCK_BASE_URL.
+    // B) Destino (AWS Cost Explorer) e componentes da assinatura.
     // ============================================================
-    var $eh_mock { value = ($provedor.usar_mock == true) }
-
     var $sig_host { value = "ce.us-east-1.amazonaws.com" }
     var $canonical_uri { value = "/" }
     var $sig_endpoint { value = "https://ce.us-east-1.amazonaws.com/" }
 
-    conditional {
-      if ($eh_mock == true) {
-        precondition ($env.MOCK_BASE_URL != null && $env.MOCK_BASE_URL != "") {
-          error_type = "inputerror"
-          error = "Ambiente Mock não configurado (MOCK_BASE_URL ausente)"
-        }
-        var $mock_base_raw { value = $env.MOCK_BASE_URL }
-        var $mock_base_len { value = $mock_base_raw|strlen }
-        var $mock_base_ultimo { value = $mock_base_raw|substr:($mock_base_len - 1) }
-        var $mock_base_norm { value = $mock_base_raw }
+    // ============================================================
+    // B.1) Exclusão mútua (P2-9): uma classificação por provedor por vez,
+    //      pela tabela travas (índice único em `nome`, aquisição atômica).
+    //      Trava com mais de 15 min é órfã: é removida e a aquisição é
+    //      tentada mais uma vez. Liberada antes da resposta (seção H); se a
+    //      requisição cair no meio, a trava vira órfã e é retomada depois.
+    // ============================================================
+    var $trava_nome { value = "classif_custos_" ~ ($input.id|to_text) }
+    var $trava_id { value = null }
+    var $ocupado { value = false }
+
+    foreach ([1, 2]) {
+      each as $tentativa {
         conditional {
-          if ($mock_base_ultimo == "/") {
-            var.update $mock_base_norm { value = $mock_base_raw|substr:0:($mock_base_len - 1) }
-          }
-        }
-        var $mock_host { value = $mock_base_norm }
-        conditional {
-          if ($mock_base_norm|starts_with:"https://") {
-            var.update $mock_host { value = $mock_base_norm|substr:8 }
-          }
-          else {
-            conditional {
-              if ($mock_base_norm|starts_with:"http://") {
-                var.update $mock_host { value = $mock_base_norm|substr:7 }
+          if ($trava_id == null && $ocupado == false) {
+            try_catch {
+              try {
+                var $agora_trava { value = now|to_int }
+                db.add travas {
+                  data = {nome: $trava_nome, adquirida_em: $agora_trava}
+                } as $nova_trava
+                var.update $trava_id { value = $nova_trava.id }
+              }
+              catch {
+                db.get travas {
+                  field_name = "nome"
+                  field_value = $trava_nome
+                } as $trava_atual
+                conditional {
+                  if ($trava_atual != null) {
+                    var $agora_cmp { value = now|to_int }
+                    var $idade_trava { value = $agora_cmp - $trava_atual.adquirida_em }
+                    conditional {
+                      if ($idade_trava > 900000 && $tentativa == 1) {
+                        db.del travas {
+                          field_name = "id"
+                          field_value = $trava_atual.id
+                        }
+                      }
+                      else {
+                        var.update $ocupado { value = true }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
         }
-        var.update $sig_host { value = $mock_host }
-        var.update $canonical_uri { value = "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
-        var.update $sig_endpoint { value = $mock_base_norm ~ "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
       }
+    }
+
+    precondition ($trava_id != null) {
+      error_type = "inputerror"
+      error = "Já existe uma classificação de custos em andamento para este provedor."
     }
 
     // ============================================================
@@ -178,6 +195,7 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
     var $moeda_divergente { value = false }
     var $falha_normalizacao { value = false }
     var $falha_persistencia { value = false }
+    var $resultado_vazio { value = false }
     var $ce_result { value = null }
 
     while ($continuar == true && $iteracoes < $max_iteracoes) {
@@ -629,14 +647,33 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
               return = {type: "list"}
             } as $candidatos
 
+            var $a_remover { value = [] }
             foreach ($candidatos) {
               each as $cand {
                 var $cand_key { value = "k" ~ (($cand.projeto_id|to_text)|sha256) }
                 conditional {
                   if ($ativos|has:$cand_key) {
+                    var.update $a_remover { value = $a_remover|merge:[$cand.id] }
+                  }
+                }
+              }
+            }
+
+            // Guarda de resultado vazio: se o provedor não devolveu nenhum
+            // custo classificável e há custos gravados na janela, a resposta
+            // é tratada como anomalia (Tag Key errada, tag de alocação
+            // inativa, fonte vazia). Nada é removido e a execução vira erro.
+            conditional {
+              if (($agg_chaves|count) == 0 && ($a_remover|count) > 0) {
+                var.update $falhou { value = true }
+                var.update $resultado_vazio { value = true }
+              }
+              else {
+                foreach ($a_remover) {
+                  each as $remover_id {
                     db.del custos_equipe {
                       field_name = "id"
-                      field_value = $cand.id
+                      field_value = $remover_id
                     }
                     var.update $registros_removidos { value = $registros_removidos + 1 }
                   }
@@ -661,6 +698,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
       if ($falhou == false && ($agg_chaves|count) > 0 && $linhas_com_equipe == 0) {
         var.update $aviso { value = "Nenhum custo com equipe foi encontrado na janela. Confira se a Tag Key de equipe '" ~ $tag_key_eqp ~ "' está ativada como Cost Allocation Tag na conta AWS." }
       }
+      elseif ($falhou == false && ($agg_chaves|count) == 0) {
+        var.update $aviso { value = "Nenhum custo classificado por projeto foi encontrado na janela. Confira se a Tag Key de projeto '" ~ $tag_key_prj ~ "' está ativada como Cost Allocation Tag na conta AWS." }
+      }
     }
 
     var $diagnostico { value = null }
@@ -675,6 +715,9 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
           elseif ($moeda_divergente == true) {
             var.update $mensagem { value = "Custos com moedas diferentes na mesma chave; agregação não suportada" }
           }
+          elseif ($resultado_vazio == true) {
+            var.update $mensagem { value = "O provedor não retornou nenhum custo classificável na janela; os custos já gravados foram preservados. Confira a Tag Key de projeto '" ~ $tag_key_prj ~ "' e se ela está ativada como Cost Allocation Tag." }
+          }
           elseif ($falha_normalizacao == true) {
             var.update $mensagem { value = "Falha ao processar a resposta do AWS Cost Explorer" }
           }
@@ -683,11 +726,24 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
           }
           else {
             var.update $mensagem { value = "Falha ao consultar o AWS Cost Explorer" }
+            var $erro_tipo { value = null }
+        var $erro_msg_alt { value = null }
+        // AWS JSON 1.1 devolve o erro em "__type"/"message";
+        // a Query API devolve em Error.Code/Error.Message. Lê os dois.
+        try_catch {
+          try {
+            var.update $erro_tipo { value = $ce_result.response.result|get:"__type":null }
+            var.update $erro_msg_alt { value = $ce_result.response.result|get:"message":null }
+          }
+          catch {
+            var.update $erro_tipo { value = null }
+          }
+        }
             var.update $diagnostico {
               value = {
                 http_status: ($ce_result != null) ? $ce_result.response.status : null
-                error_code : ($ce_result.response.result.Error.Code ?? null)
-                error_msg  : ($ce_result.response.result.Error.Message ?? null)
+                error_code : ($ce_result.response.result.Error.Code ?? $erro_tipo)
+                error_msg  : ($ce_result.response.result.Error.Message ?? $erro_msg_alt)
                 request_id : ($ce_result.response.result.RequestId ?? null)
               }
             }
@@ -717,6 +773,12 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
       }
     } as $registro_execucao
 
+    // Libera a trava da classificação (B.1).
+    db.del travas {
+      field_name = "id"
+      field_value = $trava_id
+    }
+
     var $resposta {
       value = {
         provedor_id        : $provedor.id
@@ -737,4 +799,5 @@ query "provedores/{id}/classificar-custos-equipe" verb=POST {
   }
 
   response = $resposta
+  guid = "7b7X_B9yjQxX-8UOAL1YdLLzZwg"
 }

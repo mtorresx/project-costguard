@@ -1,0 +1,50 @@
+{
+  "status": 200,
+  "corpo": {
+    "data_inicio": "2026-11-01",
+    "data_fim": "2026-11-14",
+    "mes": "2026-11",
+    "mes_corrente": true,
+    "projetos": [
+      {
+        "id": 6,
+        "nome": "TESTE_ALERTA_86520 X",
+        "codigo": "TESTE_ALERTA_86520",
+        "status": "inativo",
+        "budget": 30,
+        "custo_status": "sem_registros",
+        "custo_mtd": null,
+        "moeda": null,
+        "ultima_data_com_custo": null,
+        "percentual_usado": null,
+        "faixa": null
+      },
+      {
+        "id": 5,
+        "nome": "Portal Web",
+        "codigo": "PORTAL",
+        "status": "ativo",
+        "budget": 1500,
+        "custo_status": "sem_registros",
+        "custo_mtd": null,
+        "moeda": null,
+        "ultima_data_com_custo": null,
+        "percentual_usado": null,
+        "faixa": null
+      },
+      {
+        "id": 4,
+        "nome": "Marketing",
+        "codigo": "MARKETING",
+        "status": "ativo",
+        "budget": 480,
+        "custo_status": "sem_registros",
+        "custo_mtd": null,
+        "moeda": null,
+        "ultima_data_com_custo": null,
+        "percentual_usado": null,
+        "faixa": null
+      }
+    ]
+  }
+}

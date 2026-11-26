@@ -9,33 +9,23 @@ query "projetos/{id}/equipes" verb=GET {
   }
 
   stack {
-    db.get projetos {
+    // P2-10: usuário desativado (ou removido) perde também o acesso às leituras.
+    db.get usuarios {
       field_name = "id"
-      field_value = $input.id
-    } as $projeto
+      field_value = $auth.id
+    } as $usuario_sessao
 
-    precondition ($projeto != null) {
-      error_type = "notfound"
-      error = "Projeto não encontrado"
+    precondition ($usuario_sessao != null && $usuario_sessao.status == "ativo") {
+      error_type = "unauthorized"
+      error = "Token inválido ou expirado"
     }
 
-    db.query equipes {
-      where = $db.equipes.projeto_id == $input.id
-      sort = {codigo: "asc"}
-      return = {type: "list"}
-    } as $lista
-
-    var $resposta {
-      value = $lista|map:{
-        id         : $$.id,
-        nome       : $$.nome,
-        codigo     : $$.codigo,
-        projeto_id : $$.projeto_id,
-        auto_gerada: $$.auto_gerada
-      }
-    }
+    // Lógica em function "costguard/equipes_projeto" (mesmo contrato).
+    function.run "costguard/equipes_projeto" {
+      input = {id: $input.id}
+    } as $resultado
   }
 
-  response = $resposta
+  response = $resultado
   guid = "lmC_mvQPmdBtK_gRI6xnpX502Og"
 }

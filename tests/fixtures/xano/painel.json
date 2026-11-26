@@ -1,0 +1,134 @@
+{
+  "status": 200,
+  "corpo": {
+    "resumo": {
+      "data_inicio": "2026-11-01",
+      "data_fim": "2026-11-14",
+      "mes": "2026-11",
+      "mes_corrente": true,
+      "projetos": [
+        {
+          "id": 6,
+          "nome": "TESTE_ALERTA_86520 X",
+          "codigo": "TESTE_ALERTA_86520",
+          "status": "inativo",
+          "budget": 30,
+          "custo_status": "sem_registros",
+          "custo_mtd": null,
+          "moeda": null,
+          "ultima_data_com_custo": null,
+          "percentual_usado": null,
+          "faixa": null
+        },
+        {
+          "id": 5,
+          "nome": "Portal Web",
+          "codigo": "PORTAL",
+          "status": "ativo",
+          "budget": 1500,
+          "custo_status": "sem_registros",
+          "custo_mtd": null,
+          "moeda": null,
+          "ultima_data_com_custo": null,
+          "percentual_usado": null,
+          "faixa": null
+        },
+        {
+          "id": 4,
+          "nome": "Marketing",
+          "codigo": "MARKETING",
+          "status": "ativo",
+          "budget": 480,
+          "custo_status": "sem_registros",
+          "custo_mtd": null,
+          "moeda": null,
+          "ultima_data_com_custo": null,
+          "percentual_usado": null,
+          "faixa": null
+        }
+      ]
+    },
+    "alertas": [
+      {
+        "id": 2,
+        "tipo": "nao_classificado",
+        "nivel": "atencao",
+        "mensagem": "7 recursos sem projeto válido no provedor AWS-DATA",
+        "detalhe": "Corrija a tag de projeto (PRJ) na origem. Enquanto isso, o custo desses recursos fica fora dos orçamentos.",
+        "projeto_id": 0,
+        "projeto_nome": null,
+        "provedor_id": 3,
+        "provedor_nome": "AWS-DATA",
+        "resolvido": false,
+        "resolucao": "",
+        "resolvido_em": 0,
+        "criado_em": 1793713889114,
+        "atualizado_em": 1794604084595
+      },
+      {
+        "id": 1,
+        "tipo": "nao_classificado",
+        "nivel": "atencao",
+        "mensagem": "9 recursos sem projeto válido no provedor AWS-DEV",
+        "detalhe": "Corrija a tag de projeto (PRJ) na origem. Enquanto isso, o custo desses recursos fica fora dos orçamentos.",
+        "projeto_id": 0,
+        "projeto_nome": null,
+        "provedor_id": 2,
+        "provedor_nome": "AWS-DEV",
+        "resolvido": false,
+        "resolucao": "",
+        "resolvido_em": 0,
+        "criado_em": 1793713889074,
+        "atualizado_em": 1794604041095
+      },
+      {
+        "id": 6,
+        "tipo": "nao_classificado",
+        "nivel": "atencao",
+        "mensagem": "1 recurso sem projeto válido no provedor prdo",
+        "detalhe": "Corrija a tag de projeto () na origem. Enquanto isso, o custo desses recursos fica fora dos orçamentos.",
+        "projeto_id": 0,
+        "projeto_nome": null,
+        "provedor_id": 4,
+        "provedor_nome": "prdo",
+        "resolvido": true,
+        "resolucao": "automatica",
+        "resolvido_em": 1794608634709,
+        "criado_em": 1794608115194,
+        "atualizado_em": 1794608634709
+      }
+    ],
+    "recursos_nao_classificados": [
+      {
+        "id": 39,
+        "provedor_id": 2,
+        "provedor_nome": "AWS-DEV",
+        "arn": "arn:aws:ec2:sa-east-1:123456789012:instance/i-f8c8e99c0d693703c",
+        "servico": "ec2",
+        "regiao": "sa-east-1",
+        "codigo_projeto_tag": "PROJETO_NAO_CADASTRADO",
+        "descoberto_em": 1793713744378
+      },
+      {
+        "id": 1026,
+        "provedor_id": 2,
+        "provedor_nome": "AWS-DEV",
+        "arn": "arn:aws:ec2:us-west-2:123456789012:volume/vol-f47d57e117e2d9dfa",
+        "servico": "ec2",
+        "regiao": "us-west-2",
+        "codigo_projeto_tag": "",
+        "descoberto_em": 1794604040181
+      },
+      {
+        "id": 1028,
+        "provedor_id": 2,
+        "provedor_nome": "AWS-DEV",
+        "arn": "arn:aws:lambda:sa-east-1:123456789012:function:function-0078-aaafc6",
+        "servico": "lambda",
+        "regiao": "sa-east-1",
+        "codigo_projeto_tag": "",
+        "descoberto_em": 1794604040289
+      }
+    ]
+  }
+}

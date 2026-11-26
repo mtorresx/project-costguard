@@ -1,0 +1,35 @@
+{
+  "status": 200,
+  "corpo": [
+    {
+      "id": 4,
+      "apelido": "prdo",
+      "tipo": "aws",
+      "identificador_conta": "000000000000",
+      "tipo_credencial": "aws_access_key",
+      "tag_alocacao_projeto": "",
+      "tag_alocacao_equipe": "EQP",
+      "status": "ok"
+    },
+    {
+      "id": 3,
+      "apelido": "AWS-DATA",
+      "tipo": "aws",
+      "identificador_conta": "<CONTA_ID>",
+      "tipo_credencial": "aws_access_key",
+      "tag_alocacao_projeto": "PRJ",
+      "tag_alocacao_equipe": "EQP",
+      "status": "ok"
+    },
+    {
+      "id": 2,
+      "apelido": "AWS-DEV",
+      "tipo": "aws",
+      "identificador_conta": "<CONTA_ID>",
+      "tipo_credencial": "aws_access_key",
+      "tag_alocacao_projeto": "PRJ",
+      "tag_alocacao_equipe": "EQP",
+      "status": "ok"
+    }
+  ]
+}

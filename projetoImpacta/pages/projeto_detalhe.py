@@ -1,18 +1,20 @@
 """Página de detalhamento de projeto ("/projetos/[projeto_id]").
 
-Porta o design de C:\\frontend-costguard (pages/projetos.py, projeto_detalhe_page)
+Porta o design do frontend original de referência (pages/projetos.py, projeto_detalhe_page)
 e liga os blocos aos endpoints reais do Xano. Blocos sem dado real não são
-desenhados: não há projeção, tendência, custo por provedor nem custo por recurso.
+desenhados: não há projeção, tendência nem custo por provedor. O custo por recurso
+é só a coluna "Custo (USD)" da tabela; os totais do topo vêm de custos-equipe.
 
-Ver openspec/changes/frontend-detalhamento-projeto (proposal, design, spec).
 """
 
 import reflex as rx
 
 from .. import theme as t
+from ..components.mensagens import aviso_fechavel
 from ..components.layout import app_shell
+from ..components.periodo_state import seletor_mes
+from ..components.pill import selo_novo
 from .projeto_detalhe_state import (
-    TEXTO_SEM_CUSTO,
     EquipeCusto,
     GrupoRecursos,
     ProjetoDetalheState,
@@ -49,6 +51,26 @@ def _breadcrumb() -> rx.Component:
     )
 
 
+def _botao_notificar(tipo: str, rotulo: str) -> rx.Component:
+    estado = ProjetoDetalheState
+    desabilitado = (~estado.tem_email_devops | estado.inativo | (estado.enviando != "")
+                    | estado.bloqueados.contains(tipo))
+    if tipo == "recursos":
+        sem_recursos = estado.total_sem_responsavel == 0
+        indisponivel = estado.carregando_recursos | (estado.erro_recursos != "")
+        desabilitado = desabilitado | sem_recursos | indisponivel
+        rotulo = rx.cond(sem_recursos & ~indisponivel, "Nenhum recurso sem equipe", rotulo)
+    aviso = estado.avisos.get(tipo, "")
+    return rx.vstack(
+        rx.button(
+            rx.icon("mail", size=15), rotulo, on_click=estado.notificar(tipo),
+            disabled=desabilitado, loading=estado.enviando == tipo, variant="soft", color_scheme="teal",
+        ),
+        rx.cond(aviso != "", aviso_fechavel(aviso)),
+        align="start", spacing="1",
+    )
+
+
 def _cabecalho() -> rx.Component:
     return rx.hstack(
         rx.vstack(
@@ -68,13 +90,15 @@ def _cabecalho() -> rx.Component:
             align="start",
         ),
         rx.spacer(),
-        rx.button(
-            rx.icon("download", size=16),
-            "Exportar Dados",
-            on_click=ProjetoDetalheState.exportar_csv,
-            variant="outline",
-            size="2",
+        rx.vstack(
+            seletor_mes(ProjetoDetalheState.mudar_mes),
+            _botao_notificar("orcamento", "Notificar orçamento"),
+            _botao_notificar("recursos", "Notificar recursos sem equipe"),
+            rx.cond(ProjetoDetalheState.dica_devops != "",
+                    rx.text(ProjetoDetalheState.dica_devops, size="1", color=t.TEXT_MED)),
+            align="start", spacing="2",
         ),
+        flex_wrap="wrap",
         width="100%",
         align="start",
         margin_top="1rem",
@@ -103,7 +127,7 @@ def _kpi_card(icone: str, label: str, valor, rodape: rx.Component) -> rx.Compone
 def _card_custo() -> rx.Component:
     return _kpi_card(
         "wallet",
-        "Custo classificado (MTD)",
+        "Custo classificado no mês",
         ProjetoDetalheState.custo_texto,
         rx.text(ProjetoDetalheState.rodape_custo, size="1", color=t.TEXT_MED, margin_top="0.5rem"),
     )
@@ -142,6 +166,11 @@ def _card_orcamento() -> rx.Component:
             rx.text(ProjetoDetalheState.percentual_texto, size="1", color=t.TEXT_MED, margin_top="0.25rem"),
             rx.text(ProjetoDetalheState.comparacao_texto, size="1", color=t.TEXT_MED, margin_top="0.25rem"),
         ),
+        rx.cond(
+            ProjetoDetalheState.mes_fechado,
+            rx.text("Mês fechado comparado ao orçamento mensal atual do projeto.", size="1", color=t.TEXT_LOW, margin_top="0.25rem"),
+            rx.fragment(),
+        ),
         background=t.SURFACE,
         border=f"1px solid {t.BORDER_SUBTLE}",
         border_radius="12px",
@@ -158,7 +187,7 @@ def _barra_equipe(item: EquipeCusto) -> rx.Component:
     return rx.vstack(
         rx.hstack(
             rx.hstack(
-                rx.box(width="8px", height="8px", border_radius="full", background=rx.color("teal", 9)),
+                rx.box(width="8px", height="8px", border_radius="full", background=rx.cond(item["largura"] == "0%", rx.color("gray", 7), rx.color("teal", 9))),
                 rx.text(item["nome"], size="2", weight="medium"),
                 rx.text(item["recursos_texto"], size="1", color=t.TEXT_MED),
                 spacing="2",
@@ -170,11 +199,9 @@ def _barra_equipe(item: EquipeCusto) -> rx.Component:
             align="center",
         ),
         rx.box(
-            rx.box(
-                width=item["largura"],
-                height="100%",
-                background=rx.color("teal", 9),
-                border_radius="full",
+            rx.cond(
+                item["largura"] != "0%",
+                rx.box(width=item["largura"], height="100%", background=rx.color("teal", 9), border_radius="full"),
             ),
             width="100%",
             height="6px",
@@ -195,10 +222,10 @@ def _bloco_equipes() -> rx.Component:
             rx.center(rx.spinner(size="3"), padding_y="6"),
             rx.cond(
                 ProjetoDetalheState.erro_custos != "",
-                rx.callout(ProjetoDetalheState.erro_custos, color_scheme="red", size="1", width="100%"),
+                aviso_fechavel(ProjetoDetalheState.erro_custos),
                 rx.cond(
                     ProjetoDetalheState.sem_custos,
-                    _vazio(TEXTO_SEM_CUSTO),
+                    _vazio(ProjetoDetalheState.texto_sem_custo),
                     rx.cond(
                         ProjetoDetalheState.equipes_custo.length() > 0,
                         rx.grid(
@@ -207,7 +234,7 @@ def _bloco_equipes() -> rx.Component:
                             spacing="5",
                             width="100%",
                         ),
-                        _vazio("Nenhum custo por equipe no mês até a data atual."),
+                        _vazio(rx.cond(ProjetoDetalheState.mes_fechado, "Nenhum custo por equipe neste mês.", "Nenhum custo por equipe no mês até a data atual.")),
                     ),
                 ),
             ),
@@ -227,6 +254,7 @@ def _recurso_row(recurso: RecursoDetalhe) -> rx.Component:
                 rx.hstack(
                     rx.icon(recurso["servico_icone"], size=14, color=recurso["servico_cor"]),
                     rx.text(recurso["nome"], font_family="monospace", size="2"),
+                    rx.cond(recurso["novo"], selo_novo(), rx.fragment()),
                     spacing="2",
                     align="center",
                 ),
@@ -235,6 +263,26 @@ def _recurso_row(recurso: RecursoDetalhe) -> rx.Component:
         ),
         rx.table.cell(rx.text(recurso["servico"], size="2", color=rx.color("gray", 10))),
         rx.table.cell(rx.text(recurso["regiao"], size="2", color=rx.color("gray", 10))),
+        rx.table.cell(rx.text(recurso["custo_mensal"], size="2", color=rx.color("gray", 10)), justify="end"),
+    )
+
+
+def _tabela_recursos(recursos) -> rx.Component:
+    return rx.table.root(
+        rx.table.header(
+            rx.table.row(
+                rx.table.column_header_cell("Recurso"),
+                rx.table.column_header_cell("Serviço"),
+                rx.table.column_header_cell("Região"),
+                rx.table.column_header_cell("Custo (USD)", justify="end"),
+            ),
+        ),
+        rx.table.body(
+            rx.foreach(recursos, _recurso_row),
+        ),
+        width="100%",
+        variant="ghost",
+        size="1",
     )
 
 
@@ -264,21 +312,7 @@ def _grupo_recursos(grupo: GrupoRecursos) -> rx.Component:
         ),
         rx.cond(
             ~recolhido,
-            rx.table.root(
-                rx.table.header(
-                    rx.table.row(
-                        rx.table.column_header_cell("Recurso"),
-                        rx.table.column_header_cell("Serviço"),
-                        rx.table.column_header_cell("Região"),
-                    ),
-                ),
-                rx.table.body(
-                    rx.foreach(grupo["recursos"].to(list[RecursoDetalhe]), _recurso_row),
-                ),
-                width="100%",
-                variant="ghost",
-                size="1",
-            ),
+            _tabela_recursos(grupo["recursos"].to(list[RecursoDetalhe])),
             rx.fragment(),
         ),
         border=f"1px solid {rx.color('gray', 5)}",
@@ -291,14 +325,9 @@ def _grupo_recursos(grupo: GrupoRecursos) -> rx.Component:
 def _bloco_recursos() -> rx.Component:
     return rx.vstack(
         rx.hstack(
-            rx.text("Recursos detalhados por equipe", weight="bold", color=t.TEXT_HIGH),
-            rx.spacer(),
-            rx.button(
-                rx.icon("download", size=14),
-                "Exportar CSV",
-                on_click=ProjetoDetalheState.exportar_csv,
-                variant="soft",
-                size="1",
+            rx.cond(
+                (ProjetoDetalheState.grupos.length() == 0) | (ProjetoDetalheState.grupos_com_equipe_ou_tag.length() > 0),
+                rx.text("Recursos detalhados por equipe", weight="bold", color=t.TEXT_HIGH),
             ),
             width="100%",
             align="center",
@@ -308,11 +337,11 @@ def _bloco_recursos() -> rx.Component:
             rx.center(rx.spinner(size="3"), padding_y="6", width="100%"),
             rx.cond(
                 ProjetoDetalheState.erro_recursos != "",
-                rx.callout(ProjetoDetalheState.erro_recursos, color_scheme="red", size="1", width="100%"),
+                aviso_fechavel(ProjetoDetalheState.erro_recursos),
                 rx.cond(
                     ProjetoDetalheState.grupos.length() > 0,
                     rx.vstack(
-                        rx.foreach(ProjetoDetalheState.grupos, _grupo_recursos),
+                        rx.foreach(ProjetoDetalheState.grupos_com_equipe_ou_tag, _grupo_recursos),
                         spacing="3",
                         width="100%",
                     ),
@@ -326,55 +355,26 @@ def _bloco_recursos() -> rx.Component:
 
 
 def _bloco_sem_responsavel() -> rx.Component:
-    # Critério de exibição: inventário com recursos ativos sem equipe (não o custo).
+    estado = ProjetoDetalheState
     return rx.cond(
-        ProjetoDetalheState.bloco_sem_responsavel,
-        rx.box(
-            rx.hstack(
-                rx.icon("triangle-alert", size=20, color=t.ERROR, flex_shrink="0"),
+        ~estado.carregando_recursos & (estado.erro_recursos == ""),
+        rx.vstack(
+            rx.heading("Recursos sem equipe", size="4", color=t.TEXT_HIGH),
+            rx.cond(
+                estado.bloco_sem_responsavel,
                 rx.vstack(
-                    rx.text("⚠️ Recursos sem responsável", font_weight="600", font_size="13px", color=t.TEXT_HIGH),
-                    rx.text(ProjetoDetalheState.texto_sem_responsavel, font_size="12px", font_weight="600", color=t.TEXT_HIGH),
-                    rx.text(
-                        "Estes recursos já pertencem ao projeto, mas não têm tag de equipe (EQP) atribuída. "
-                        "Sem equipe, não há como saber quem gerou o custo (chargeback).",
-                        font_size="12px",
-                        color=t.TEXT_MED,
-                    ),
-                    rx.cond(
-                        ProjetoDetalheState.sem_responsavel_custo_texto != "",
-                        rx.text(
-                            ProjetoDetalheState.sem_responsavel_custo_texto,
-                            font_size="13px",
-                            font_weight="700",
-                            color="#fb923c",
-                        ),
-                        rx.fragment(),
-                    ),
-                    spacing="1",
-                    align="start",
+                    rx.text(estado.texto_sem_responsavel, size="2", color=t.TEXT_MED),
+                    rx.cond(estado.sem_responsavel_custo_texto != "",
+                            rx.text(estado.sem_responsavel_custo_texto, size="2", color=t.TEXT_MED)),
+                    _tabela_recursos(estado.recursos_sem_equipe),
+                    width="100%", align="start", spacing="2",
                 ),
-                rx.spacer(),
-                rx.button(
-                    rx.icon("mail", size=14),
-                    "Notificar DevOps",
-                    disabled=True,
-                    variant="surface",
-                    color_scheme="yellow",
-                    size="2",
-                ),
-                width="100%",
-                align="center",
+                rx.text("Nenhum recurso sem equipe", size="2", color=t.TEXT_MED),
             ),
-            background="rgba(239, 68, 68, 0.08)",
-            border="1px solid rgba(239, 68, 68, 0.25)",
-            border_left=f"4px solid {t.ERROR}",
-            border_radius="10px",
-            padding="16px",
-            width="100%",
+            width="100%", align="start", spacing="2",
         ),
-        rx.fragment(),
     )
+
 
 
 def _conteudo() -> rx.Component:
@@ -425,7 +425,7 @@ def projeto_detalhe_page() -> rx.Component:
                 _nao_encontrado(),
                 rx.cond(
                     ProjetoDetalheState.erro != "",
-                    rx.callout(ProjetoDetalheState.erro, color_scheme="red", size="1", width="100%"),
+                    aviso_fechavel(ProjetoDetalheState.erro),
                     _conteudo(),
                 ),
             ),

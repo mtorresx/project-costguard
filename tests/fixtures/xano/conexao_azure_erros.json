@@ -1,0 +1,46 @@
+{
+  "campo_invalido_tenant_id": {
+    "http": 400,
+    "message": "Dados de conexão inválidos. Verifique o campo tenant_id."
+  },
+  "campo_invalido_client_id": {
+    "http": 400,
+    "message": "Dados de conexão inválidos. Verifique o campo client_id."
+  },
+  "campo_invalido_subscription_id": {
+    "http": 400,
+    "message": "Dados de conexão inválidos. Verifique o campo subscription_id."
+  },
+  "campo_invalido_client_secret": {
+    "http": 400,
+    "message": "Dados de conexão inválidos. Verifique o campo client_secret."
+  },
+  "azure_recusou": {
+    "http": 400,
+    "message": "Não foi possível autenticar no Azure com os dados informados."
+  },
+  "azure_429": {
+    "http": 429,
+    "message": "O Azure limitou as requisições. Aguarde 25 segundos para tentar de novo."
+  },
+  "trava": {
+    "http": 429,
+    "message": "Já existe uma operação de conexão ou sincronização do Azure em andamento. Tente novamente em instantes."
+  },
+  "nao_admin": {
+    "http": 403,
+    "message": "Acesso negado"
+  },
+  "sem_sessao": {
+    "http": 401,
+    "message": "Token inválido ou expirado"
+  },
+  "falha_interna": {
+    "http": 500,
+    "message": "Não foi possível salvar a conexão do Azure agora. Tente novamente em instantes."
+  },
+  "apelido_invalido": {
+    "http": 400,
+    "message": "Apelido inválido: use de 1 a 60 caracteres."
+  }
+}

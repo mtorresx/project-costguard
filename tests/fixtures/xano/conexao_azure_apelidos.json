@@ -1,0 +1,85 @@
+{
+  "validos": [
+    {
+      "nome": "simples",
+      "entrada": "Azure produção",
+      "gravado": "Azure produção"
+    },
+    {
+      "nome": "com_espacos_nas_pontas",
+      "entrada": "  Azure produção  ",
+      "gravado": "Azure produção"
+    },
+    {
+      "nome": "exatamente_60",
+      "entrada": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "gravado": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "nome": "60_com_espacos_nas_pontas",
+      "entrada": "  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  ",
+      "gravado": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "nome": "com_cr_lf_no_meio",
+      "entrada": "Azure\r\nProd",
+      "gravado": "Azure  Prod"
+    },
+    {
+      "nome": "com_tab_no_meio",
+      "entrada": "Azure\tProd",
+      "gravado": "Azure Prod"
+    },
+    {
+      "nome": "com_cr_lf_nas_pontas",
+      "entrada": "\r\nAzure\r\n",
+      "gravado": "Azure"
+    },
+    {
+      "nome": "so_espacos",
+      "entrada": "     ",
+      "gravado": ""
+    },
+    {
+      "nome": "so_cr_lf",
+      "entrada": "\r\n\r\n",
+      "gravado": ""
+    },
+    {
+      "nome": "vazio",
+      "entrada": "",
+      "gravado": ""
+    },
+    {
+      "nome": "ausente_ou_null",
+      "entrada": null,
+      "gravado": ""
+    }
+  ],
+  "invalidos": [
+    {
+      "nome": "61_caracteres",
+      "entrada": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "nome": "61_apos_trim_com_espacos_nas_pontas",
+      "entrada": "  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  "
+    },
+    {
+      "nome": "61_com_cr_lf_no_meio",
+      "entrada": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r\nBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    },
+    {
+      "nome": "200_caracteres_acima_do_corte_de_120",
+      "entrada": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "nome": "60_mais_espacos_mais_1_acima_de_120",
+      "entrada": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA                                                            Z"
+    },
+    {
+      "nome": "10_mais_115_espacos_mais_1",
+      "entrada": "AAAAAAAAAA                                                                                                                   Z"
+    }
+  ]
+}

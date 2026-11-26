@@ -1,0 +1,35 @@
+{
+  "status": 200,
+  "corpo": [
+    {
+      "id": 39,
+      "provedor_id": 2,
+      "provedor_nome": "AWS-DEV",
+      "arn": "arn:aws:ec2:sa-east-1:123456789012:instance/i-f8c8e99c0d693703c",
+      "servico": "ec2",
+      "regiao": "sa-east-1",
+      "codigo_projeto_tag": "PROJETO_NAO_CADASTRADO",
+      "descoberto_em": 1793713744378
+    },
+    {
+      "id": 1026,
+      "provedor_id": 2,
+      "provedor_nome": "AWS-DEV",
+      "arn": "arn:aws:ec2:us-west-2:123456789012:volume/vol-f47d57e117e2d9dfa",
+      "servico": "ec2",
+      "regiao": "us-west-2",
+      "codigo_projeto_tag": "",
+      "descoberto_em": 1794604040181
+    },
+    {
+      "id": 1028,
+      "provedor_id": 2,
+      "provedor_nome": "AWS-DEV",
+      "arn": "arn:aws:lambda:sa-east-1:123456789012:function:function-0078-aaafc6",
+      "servico": "lambda",
+      "regiao": "sa-east-1",
+      "codigo_projeto_tag": "",
+      "descoberto_em": 1794604040289
+    }
+  ]
+}

@@ -6,8 +6,9 @@ Consome somente endpoints reais já existentes (api_group `app`):
 - GET /projetos/{id}/recursos
 - GET /projetos/{id}/equipes
 
-Não há dado fictício, projeção, tendência, custo por provedor nem custo por
-recurso. Os blocos de custo e de recursos carregam de forma independente: uma
+Não há dado fictício, projeção, tendência nem custo por provedor. O custo por
+recurso (`custo_mensal`, USD) é só exibido na tabela; os totais do projeto vêm de
+custos-equipe e não são recalculados a partir dele. Os blocos de custo e de recursos carregam de forma independente: uma
 falha em um não esconde o outro.
 
 O mês é determinado no fuso America/Sao_Paulo (ver `janela_mtd`). A semântica do
@@ -18,9 +19,10 @@ A autorização permanece no backend. O frontend não é mecanismo de segurança
 
 from __future__ import annotations
 
-import csv
-import io
+import asyncio
+import math
 import re
+import time
 from datetime import date, datetime, timedelta
 from typing import Any, Optional, TypedDict
 from zoneinfo import ZoneInfo
@@ -28,7 +30,14 @@ from zoneinfo import ZoneInfo
 import httpx
 import reflex as rx
 
+from ..components.mensagens import sucesso
+
+from .. import api
+from ..formatadores import formatar_valor, numero_br, percentual_br
+from ..api import cliente_xano
 from ..config import get_xano_app_base_url
+from ..components.periodo_state import PeriodoState, janela_mes
+from ..sincronizacao_auto import recurso_novo
 from ..state import AuthState
 
 FUSO_MTD = ZoneInfo("America/Sao_Paulo")
@@ -38,6 +47,7 @@ TEXTO_ERRO_PROJETO = "Não foi possível carregar o projeto."
 TEXTO_ERRO_CUSTOS = "Não foi possível carregar os custos do período."
 TEXTO_ERRO_RECURSOS = "Não foi possível carregar os recursos do projeto."
 TEXTO_SEM_CUSTO = "Sem custos classificados no mês até a data atual."
+TEXTO_SEM_CUSTO_FECHADO = "Sem custos classificados neste mês."
 TEXTO_RODAPE_CUSTO = "Custo já classificado no período. Não indica atualização até este instante."
 TEXTO_SEM_RESPONSAVEL = "Sem responsável"
 
@@ -51,6 +61,12 @@ _ICONES_SERVICO: dict[str, tuple[str, str]] = {
     "eks": ("boxes", "#f97316"),
 }
 _ICONE_PADRAO = ("cloud", "#94a3b8")
+
+
+ROTAS_NOTIFICACAO = {
+    "orcamento": "notificar-devops",
+    "recursos": "notificar-recursos-sem-equipe",
+}
 
 
 class EquipeCusto(TypedDict):
@@ -68,6 +84,8 @@ class RecursoDetalhe(TypedDict):
     servico_icone: str
     servico_cor: str
     regiao: str
+    novo: bool
+    custo_mensal: str
 
 
 class GrupoRecursos(TypedDict):
@@ -99,13 +117,6 @@ def texto_periodo(inicio: date, fim: date) -> str:
     return f"Período: {inicio:%d/%m/%Y} a {ultimo_dia:%d/%m/%Y}"
 
 
-def formatar_valor(valor: float, moeda: str) -> str:
-    """Formata um valor monetário com duas casas e separador de milhar, sem abreviar."""
-    sinal = "-" if valor < 0 else ""
-    prefixo = "US$" if moeda == MOEDA_ORCAMENTO else moeda
-    return f"{sinal}{prefixo} {abs(valor):,.2f}"
-
-
 def nome_recurso(arn: str) -> str:
     """Último segmento do ARN (após `/` ou `:`). Sem separadores, o ARN inteiro."""
     partes = [p for p in re.split(r"[/:]", arn) if p]
@@ -129,10 +140,27 @@ def _numero(valor: Any) -> float:
         return 0.0
 
 
+def texto_custo_recurso(valor: Any) -> str:
+    """Custo mensal do recurso em USD, formato pt-BR sem prefixo (o cabeçalho diz USD).
+
+    Nulo, ausente, booleano, não numérico ou não finito: "—" (nunca "0,00" inventado).
+    Zero real: "0,00". Aceita número ou string numérica ("6.5").
+    """
+    if valor is None or isinstance(valor, bool):
+        return "—"
+    try:
+        numero = float(valor.strip() if isinstance(valor, str) else valor)
+    except (TypeError, ValueError):
+        return "—"
+    if not math.isfinite(numero):
+        return "—"
+    return numero_br(numero)
+
+
 async def _buscar(url: str, token: str, params: Optional[dict] = None) -> tuple[int, Any]:
     """GET autenticado no Xano. Devolve (status HTTP, corpo JSON ou None); status 0 = falha de rede."""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with cliente_xano(30) as client:
             resp = await client.get(
                 url,
                 headers={"Authorization": f"Bearer {token}"},
@@ -159,9 +187,18 @@ class ProjetoDetalheState(rx.State):
     status_texto: str = ""
     budget: float = 0.0
     budget_texto: str = ""
+    tem_email_devops: bool = False
+    enviando: str = ""
+    bloqueados: list[str] = []
+    avisos: dict[str, str] = {}
+    dica_devops: str = ""
+    _prazos: dict[str, float] = {}
+    _projeto_devops: str = ""
 
     # Custos classificados no mês (GET /projetos/{id}/custos-equipe).
     periodo: str = ""
+    mes_fechado: bool = False
+    texto_sem_custo: str = TEXTO_SEM_CUSTO
     carregando_custos: bool = True
     erro_custos: str = ""
     moeda: str = ""
@@ -184,6 +221,22 @@ class ProjetoDetalheState(rx.State):
     bloco_sem_responsavel: bool = False
     texto_sem_responsavel: str = ""
     equipes_recolhidas: list[str] = []
+    # Recursos ativos por equipe na última carga do inventário (None = não carregou).
+    # Guardado para que recarregar só os custos (troca de mês) não apague a contagem.
+    _contagem_equipes: Optional[dict[str, int]] = None
+
+    @rx.var
+    def grupos_com_equipe_ou_tag(self) -> list[GrupoRecursos]:
+        return [grupo for grupo in self.grupos if grupo["chave"] != "sem"]
+
+    @rx.var
+    def recursos_sem_equipe(self) -> list[RecursoDetalhe]:
+        return next((grupo["recursos"] for grupo in self.grupos if grupo["chave"] == "sem"), [])
+
+    def _texto_contagem(self, chave: str) -> str:
+        if self._contagem_equipes is None:
+            return ""
+        return f"({_texto_recursos(self._contagem_equipes.get(chave, 0))})"
 
     async def _token(self) -> str:
         auth = await self.get_state(AuthState)
@@ -201,6 +254,11 @@ class ProjetoDetalheState(rx.State):
             return
 
         self.carregando = True
+        self.tem_email_devops = False
+        self.avisos = {}
+        self.bloqueados = []
+        self.dica_devops = "Carregando disponibilidade da notificação…"
+        self._projeto_devops = ""
         self.nao_encontrado = False
         self.erro = ""
         yield
@@ -214,9 +272,31 @@ class ProjetoDetalheState(rx.State):
             self.nao_encontrado = True
             return
 
-        status, corpo = await _buscar(self._base(), token)
+        # As quatro leituras são independentes: em paralelo.
+        mes = (await self.get_state(PeriodoState)).preparar()
+        inicio, fim, corrente = janela_mes(mes, datetime.now(FUSO_MTD))
+        self.mes_fechado = not corrente
+        self.texto_sem_custo = TEXTO_SEM_CUSTO if corrente else TEXTO_SEM_CUSTO_FECHADO
+        self.periodo = texto_periodo(inicio, fim) + ("" if corrente else " (mês fechado)")
+        self.carregando_custos = True
+        self.carregando_recursos = True
+        self.erro_custos = ""
+        self.erro_recursos = ""
+        base = self._base()
+        (status, painel), (status_c, custos) = await asyncio.gather(
+            _buscar(f"{base}/painel", token),
+            _buscar(f"{base}/custos-equipe", token,
+                    params={"data_inicio": inicio.isoformat(), "data_fim": fim.isoformat()}),
+        )
+        painel_ok = status == 200 and isinstance(painel, dict)
+        corpo = painel.get("projeto") if painel_ok else None
+        recursos = painel.get("recursos") if painel_ok else None
+        equipes = painel.get("equipes") if painel_ok else None
+        status_r = status_e = status
         self.carregando = False
-        if status == 401:
+        self.carregando_custos = False
+        self.carregando_recursos = False
+        if 401 in (status, status_c, status_r, status_e):
             yield AuthState.handle_unauthenticated
             return
         if status == 404:
@@ -227,8 +307,105 @@ class ProjetoDetalheState(rx.State):
             return
 
         self._preencher_projeto(corpo)
-        yield ProjetoDetalheState.carregar_custos
-        yield ProjetoDetalheState.carregar_recursos
+
+        if status_c != 200 or not isinstance(custos, dict):
+            self.erro_custos = TEXTO_ERRO_CUSTOS
+        else:
+            self._preencher_custos(custos)
+
+        if status_r != 200 or status_e != 200 or not isinstance(recursos, list) or not isinstance(equipes, list):
+            self.erro_recursos = TEXTO_ERRO_RECURSOS
+            self.grupos = []
+            self.total_sem_responsavel = 0
+            self.bloco_sem_responsavel = False
+            self._contagem_equipes = None
+        else:
+            self._montar_recursos(recursos, equipes)
+        yield ProjetoDetalheState.carregar_devops
+
+    @rx.event
+    async def carregar_devops(self):
+        # O painel agregado não inclui tem_email_devops. Só o detalhe aberto lê o cadastro.
+        projeto = str(self.projeto_id)
+        token = await self._token()
+        if not token:
+            yield AuthState.handle_unauthenticated
+            return
+        status, corpo = await api.requisitar("GET", f"/projetos/{projeto}", token)
+        if status == 401:
+            yield AuthState.handle_unauthenticated
+            return
+        self._projeto_devops = projeto
+        agora = time.time()
+        self._prazos = {k: fim for k, fim in self._prazos.items() if fim > agora}
+        self.bloqueados = [tipo for tipo in ROTAS_NOTIFICACAO if f"{projeto}:{tipo}" in self._prazos]
+        if (status != 200 or not isinstance(corpo, dict)
+                or not isinstance(corpo.get("tem_email_devops"), bool)):
+            self.tem_email_devops = False
+            self.dica_devops = "Recurso indisponível no servidor agora."
+            return
+        self.tem_email_devops = corpo["tem_email_devops"]
+        self.inativo = corpo.get("status") != "ativo"
+        self.status_texto = "Inativo" if self.inativo else "Ativo"
+        self.dica_devops = "" if self.tem_email_devops else "defina o e-mail do DevOps no projeto"
+        for tipo in self.bloqueados:
+            yield ProjetoDetalheState.liberar_notificacao(projeto, tipo)
+
+    @rx.event(background=True)
+    async def liberar_notificacao(self, projeto: str, tipo: str):
+        chave = f"{projeto}:{tipo}"
+        async with self:
+            fim = self._prazos.get(chave, 0)
+        await asyncio.sleep(max(0, fim - time.time()))
+        async with self:
+            if self._projeto_devops == projeto and self._prazos.get(chave, 0) <= time.time():
+                self.bloqueados = [item for item in self.bloqueados if item != tipo]
+
+    @rx.event
+    async def notificar(self, tipo: str):
+        projeto = str(self.projeto_id)
+        if (tipo not in ROTAS_NOTIFICACAO or projeto != self._projeto_devops or self.inativo
+                or not self.tem_email_devops or self.enviando or tipo in self.bloqueados):
+            return
+        if tipo == "recursos" and (self.carregando_recursos or self.erro_recursos or not self.total_sem_responsavel):
+            return
+        token = await self._token()
+        if not token:
+            yield AuthState.handle_unauthenticated
+            return
+        self.enviando = tipo
+        self.avisos.pop(tipo, None)
+        yield
+        status, corpo = await api.requisitar("POST", f"/projetos/{projeto}/{ROTAS_NOTIFICACAO[tipo]}", token)
+        self.enviando = ""
+        if status == 401:
+            yield AuthState.handle_unauthenticated
+            return
+        dados = corpo if isinstance(corpo, dict) else {}
+        mensagem = ""
+        if status == 200:
+            if tipo == "orcamento" and dados.get("status") == "enviado":
+                mensagem = dados.get("mensagem") or ""
+            elif tipo == "recursos" and dados.get("enviado") is True:
+                quantidade = dados.get("quantidade")
+                destinatario = dados.get("destinatario_mascarado")
+                if type(quantidade) is int and quantidade > 0 and isinstance(destinatario, str) and destinatario:
+                    mensagem = f"Notificação enviada para {destinatario}. Recursos sem equipe: {quantidade}."
+        if mensagem:
+            segundos = 300
+            yield sucesso(mensagem)
+        else:
+            aviso = dados.get("message") or "Recurso indisponível no servidor agora."
+            self.avisos[tipo] = aviso
+            segundos = api.segundos_restantes(dados) if status == 429 else None
+            if status == 429 and aviso == "Limite diário de notificações atingido; tente amanhã.":
+                agora = datetime.now(FUSO_MTD)
+                amanha = (agora + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                segundos = (amanha - agora).total_seconds()
+        if segundos:
+            self._prazos[f"{projeto}:{tipo}"] = time.time() + segundos
+            self.bloqueados.append(tipo)
+            yield ProjetoDetalheState.liberar_notificacao(projeto, tipo)
 
     def _preencher_projeto(self, corpo: dict):
         self.nome = corpo.get("nome") or ""
@@ -249,8 +426,11 @@ class ProjetoDetalheState(rx.State):
 
         self.carregando_custos = True
         self.erro_custos = ""
-        inicio, fim = janela_mtd(datetime.now(FUSO_MTD))
-        self.periodo = texto_periodo(inicio, fim)
+        mes = (await self.get_state(PeriodoState)).preparar()
+        inicio, fim, corrente = janela_mes(mes, datetime.now(FUSO_MTD))
+        self.mes_fechado = not corrente
+        self.texto_sem_custo = TEXTO_SEM_CUSTO if corrente else TEXTO_SEM_CUSTO_FECHADO
+        self.periodo = texto_periodo(inicio, fim) + ("" if corrente else " (mês fechado)")
         yield
 
         status, corpo = await _buscar(
@@ -284,8 +464,8 @@ class ProjetoDetalheState(rx.State):
 
         if not moeda:
             self.custo_texto = "—"
-            self.rodape_custo = TEXTO_SEM_CUSTO
-            self.comparacao_texto = TEXTO_SEM_CUSTO
+            self.rodape_custo = self.texto_sem_custo
+            self.comparacao_texto = self.texto_sem_custo
             self.equipes_custo = []
             self.sem_responsavel_custo_texto = ""
             return
@@ -299,7 +479,7 @@ class ProjetoDetalheState(rx.State):
             EquipeCusto(
                 chave=f"eq:{item.get('equipe_id')}",
                 nome=item.get("nome") or item.get("codigo") or "",
-                recursos_texto="",
+                recursos_texto=self._texto_contagem(f"eq:{item.get('equipe_id')}"),
                 total_texto=formatar_valor(_numero(item.get("total")), moeda),
                 largura=f"{round(_numero(item.get('total')) / total * 100) if total > 0 else 0}%",
             )
@@ -320,7 +500,7 @@ class ProjetoDetalheState(rx.State):
         percentual = round(total / budget * 100, 1)
         self.comparavel = True
         self.restante_texto = formatar_valor(restante, MOEDA_ORCAMENTO)
-        self.percentual_texto = f"{percentual:.1f}% utilizado de {self.budget_texto}"
+        self.percentual_texto = f"{percentual_br(percentual)} utilizado de {self.budget_texto}"
         self.largura_barra = f"{min(max(percentual, 0.0), 100.0)}%"
         self.comparacao_texto = ""
 
@@ -336,13 +516,11 @@ class ProjetoDetalheState(rx.State):
         self.erro_recursos = ""
         yield
 
-        status_r, recursos = await _buscar(f"{self._base()}/recursos", token)
-        if status_r == 401:
-            self.carregando_recursos = False
-            yield AuthState.handle_unauthenticated
-            return
-        status_e, equipes = await _buscar(f"{self._base()}/equipes", token)
-        if status_e == 401:
+        (status_r, recursos), (status_e, equipes) = await asyncio.gather(
+            _buscar(f"{self._base()}/recursos", token),
+            _buscar(f"{self._base()}/equipes", token),
+        )
+        if 401 in (status_r, status_e):
             self.carregando_recursos = False
             yield AuthState.handle_unauthenticated
             return
@@ -353,6 +531,7 @@ class ProjetoDetalheState(rx.State):
             self.grupos = []
             self.total_sem_responsavel = 0
             self.bloco_sem_responsavel = False
+            self._contagem_equipes = None
             return
 
         self._montar_recursos(recursos, equipes)
@@ -372,6 +551,7 @@ class ProjetoDetalheState(rx.State):
             if isinstance(e, dict)
         }
         ativos = [r for r in recursos if isinstance(r, dict) and r.get("ativo") is True]
+        agora_ms = int(time.time() * 1000)
 
         por_chave: dict[str, list[dict]] = {}
         rotulos: dict[str, str] = {}
@@ -405,6 +585,8 @@ class ProjetoDetalheState(rx.State):
                         servico_icone=icone,
                         servico_cor=cor,
                         regiao=r.get("regiao") or "",
+                        novo=recurso_novo(r.get("descoberto_em"), agora_ms),
+                        custo_mensal=texto_custo_recurso(r.get("custo_mensal")),
                     )
                 )
             grupos.append(
@@ -435,11 +617,12 @@ class ProjetoDetalheState(rx.State):
         self.equipes_recolhidas = []
 
         # Contagem de recursos ativos por equipe real, somente quando o inventário carregou.
+        self._contagem_equipes = {chave: len(itens) for chave, itens in por_chave.items()}
         self.equipes_custo = [
             EquipeCusto(
                 chave=item["chave"],
                 nome=item["nome"],
-                recursos_texto=f"({_texto_recursos(len(por_chave.get(item['chave'], [])))})",
+                recursos_texto=self._texto_contagem(item["chave"]),
                 total_texto=item["total_texto"],
                 largura=item["largura"],
             )
@@ -454,17 +637,7 @@ class ProjetoDetalheState(rx.State):
             self.equipes_recolhidas = [*self.equipes_recolhidas, chave]
 
     @rx.event
-    def exportar_csv(self):
-        """CSV somente com os dados reais carregados na tela (sem valores de custo)."""
-        buffer = io.StringIO()
-        escritor = csv.writer(buffer)
-        escritor.writerow(["Equipe", "Recurso", "ARN", "Serviço", "Região"])
-        for grupo in self.grupos:
-            for recurso in grupo["recursos"]:
-                escritor.writerow(
-                    [grupo["equipe"], recurso["nome"], recurso["arn"], recurso["servico"], recurso["regiao"]]
-                )
-        return rx.download(
-            data=buffer.getvalue(),
-            filename=f"costguard-recursos-{self.codigo.lower() or 'projeto'}.csv",
-        )
+    async def mudar_mes(self, valor: str):
+        periodo = await self.get_state(PeriodoState)
+        periodo.mes = valor
+        yield ProjetoDetalheState.carregar_custos

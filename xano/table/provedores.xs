@@ -20,7 +20,7 @@ table provedores {
       sensitive = true
       visibility = "private"
     }
-    // Reservado (ver design D4). Não usado no caminho JWE, que embute o IV.
+    // Reservado. Não usado no caminho JWE, que embute o IV.
     text aws_secret_iv? {
       sensitive = true
       visibility = "private"
@@ -37,12 +37,10 @@ table provedores {
     // nascem com "EQP"; a sincronização também aplica fallback "EQP" para
     // registros legados null/blank (ver endpoint de sincronização).
     text tag_alocacao_equipe?=EQP filters=trim
-    // Característica opcional: quando true, as chamadas ao Cost Explorer deste
-    // provedor usam o AWS Mock Simulator ({MOCK_BASE_URL}/aws/{conta}/ce/) em vez
-    // do endpoint AWS real. Default false preserva o fluxo AWS real. Não é segredo.
+    // Campo legado, sem uso. Mantido por compatibilidade com registros existentes.
     bool usar_mock?=false
     // Proteção best-effort contra duplo disparo da sincronização de recursos.
-    // NÃO é um lock atômico/distribuído (ver design): apenas evita execução
+    // NÃO é um lock atômico/distribuído: apenas evita execução
     // concorrente acidental na operação normal (endpoint admin-only).
     bool sincronizacao_recursos_em_andamento?=false {
       visibility = "private"
@@ -53,6 +51,18 @@ table provedores {
     text sincronizacao_recursos_id? {
       visibility = "private"
     }
+    // Região do índice do Resource Explorer consultada pelo inventário.
+    // Vazio = "us-east-1".
+    text regiao_inventario? filters=trim
+    // Estado da última sincronização do inventário. Mensagem
+    // sanitizada; nunca contém segredo.
+    timestamp inventario_ultima_tentativa?
+    timestamp inventario_ultimo_sucesso?
+    text inventario_ultimo_status? filters=trim
+    text inventario_ultima_mensagem?
+    text inventario_ultima_origem? filters=trim
+    // Última vez em que a sincronização criou, alterou ou desativou algum recurso.
+    timestamp inventario_ultima_mudanca?
     timestamp criado_em?=now {
       visibility = "private"
     }

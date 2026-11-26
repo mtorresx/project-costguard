@@ -19,9 +19,15 @@ from typing import Any, TypedDict
 import httpx
 import reflex as rx
 
+from ..components.mensagens import sucesso
+
+from .. import api
+from ..api import cliente_xano
 from ..config import get_xano_app_base_url
+from ..components.periodo_state import PeriodoState, parametro_mes
 from ..state import AuthState
-from .projeto_detalhe_state import MOEDA_ORCAMENTO, formatar_valor
+from .projeto_detalhe_state import MOEDA_ORCAMENTO
+from ..formatadores import formatar_valor, ler_orcamento, mascarar_orcamento, numero_br, percentual_br
 
 MENSAGEM_ERRO_PROJETOS = "Não foi possível carregar os projetos."
 MENSAGEM_ERRO_CONSUMO = "Não foi possível carregar o consumo dos projetos."
@@ -34,7 +40,10 @@ _FAIXAS = {
     "estourado": ("red", "Estourado"),
 }
 
+CUSTO_INDISPONIVEL = "indisponivel"  # item do resumo fora do contrato (só no frontend)
+
 _NOTAS_CUSTO = {
+    CUSTO_INDISPONIVEL: "Consumo indisponível",
     "sem_registros": "Sem custos classificados no mês até a data atual.",
     "moeda_incompativel": "Comparação com o orçamento em US$ não é feita.",
     "moedas_mistas": "Custos em moedas diferentes; não é possível somar.",
@@ -121,13 +130,9 @@ def _eh_data(valor: Any) -> bool:
     return True
 
 
-def _item_valido(item: Any) -> bool:
-    """Confere um item do resumo contra o contrato da spec (presença, tipos e combinações).
-
-    Tipos são conferidos antes de qualquer comparação ou consulta a dicionário,
-    para que um valor inesperado (lista, objeto) nunca gere exceção.
-    """
-    if not isinstance(item, dict) or not all(c in item for c in _CAMPOS_RESUMO):
+def _projeto_valido(item: Any) -> bool:
+    """Confere só os campos do projeto (id, nome, código, status, orçamento)."""
+    if not isinstance(item, dict) or not all(c in item for c in ("id", "nome", "codigo", "status", "budget")):
         return False
     pid = item["id"]
     if not (isinstance(pid, int) and not isinstance(pid, bool) and pid > 0):
@@ -135,8 +140,31 @@ def _item_valido(item: Any) -> bool:
     if not all(isinstance(item[c], str) for c in ("nome", "codigo", "status")):
         return False
     budget = item["budget"]
-    if not _eh_numero(budget) or budget < 0:
+    return _eh_numero(budget) and budget >= 0
+
+
+def _item_sem_consumo(item: dict) -> dict:
+    """Mesmo projeto, com o consumo marcado como indisponível (nunca zero)."""
+    return {
+        **{c: item[c] for c in ("id", "nome", "codigo", "status", "budget")},
+        "custo_status": CUSTO_INDISPONIVEL,
+        "custo_mtd": None,
+        "moeda": None,
+        "ultima_data_com_custo": None,
+        "percentual_usado": None,
+        "faixa": None,
+    }
+
+
+def _item_valido(item: Any) -> bool:
+    """Confere um item do resumo contra o contrato esperado (presença, tipos e combinações).
+
+    Tipos são conferidos antes de qualquer comparação ou consulta a dicionário,
+    para que um valor inesperado (lista, objeto) nunca gere exceção.
+    """
+    if not _projeto_valido(item) or not all(c in item for c in _CAMPOS_RESUMO):
         return False
+    budget = item["budget"]
     status_custo = item["custo_status"]
     if not isinstance(status_custo, str) or status_custo not in _CUSTO_STATUS:
         return False
@@ -163,11 +191,12 @@ def _item_valido(item: Any) -> bool:
 
 
 def itens_do_resumo(corpo: Any) -> list[dict] | None:
-    """Itens do resumo se a resposta inteira respeitar o contrato; senão None (vai ao fallback).
+    """Itens do resumo; None (vai ao fallback) se o envelope estiver fora do contrato.
 
-    Uma resposta HTTP 200 fora do contrato é tratada como falha: nada é exibido
-    como consumo e nenhum valor inválido é convertido em zero. Qualquer exceção
-    inesperada durante a checagem também leva ao fallback.
+    A checagem é item a item: um projeto com consumo fora do contrato vira
+    "Consumo indisponível" sem esconder o consumo dos demais, e nenhum valor
+    inválido é convertido em zero. Se nem os campos do projeto forem válidos,
+    ou em qualquer exceção inesperada, a resposta inteira vai ao fallback.
     """
     try:
         if not isinstance(corpo, dict):
@@ -175,14 +204,29 @@ def itens_do_resumo(corpo: Any) -> list[dict] | None:
         if not (_eh_data(corpo.get("data_inicio")) and _eh_data(corpo.get("data_fim"))):
             return None
         itens = corpo.get("projetos")
-        if not isinstance(itens, list) or not all(_item_valido(p) for p in itens):
+        if not isinstance(itens, list) or not all(_projeto_valido(p) for p in itens):
             return None
-        return itens
+        return [p if _item_valido(p) else _item_sem_consumo(p) for p in itens]
     except Exception:
         return None
 
 
-def card_de_resumo(item: dict) -> Projeto:
+def ordenar_itens(itens: list[dict]) -> list[dict]:
+    """Ativos antes de inativos; maior percentual; depois maior custo; depois nome."""
+    def chave(p: dict):
+        pct = p.get("percentual_usado")
+        custo = p.get("custo_mtd")
+        return (
+            0 if p.get("status") == "ativo" else 1,
+            0 if pct is not None else 1,
+            -(pct if pct is not None else 0),
+            -(custo if p.get("custo_status") == "ok" and custo is not None else 0),
+            (p.get("nome") or "").lower(),
+        )
+    return sorted(itens, key=chave)
+
+
+def card_de_resumo(item: dict, mes_corrente: bool = True) -> Projeto:
     """Converte um item de `GET /projetos-resumo-consumo-mtd` em card, sem recalcular regra."""
     card = _card_base(item)
     status_custo = item.get("custo_status") or ""
@@ -190,6 +234,8 @@ def card_de_resumo(item: dict) -> Projeto:
     moeda = item.get("moeda") or ""
 
     card["custo_nota"] = _NOTAS_CUSTO.get(status_custo, "")
+    if status_custo == "sem_registros" and not mes_corrente:
+        card["custo_nota"] = "Sem custos classificados neste mês."
     if status_custo in ("ok", "moeda_incompativel") and custo is not None:
         card["custo_texto"] = formatar_valor(_numero(custo), moeda)
     if ultima := _data_br(item.get("ultima_data_com_custo")):
@@ -200,7 +246,7 @@ def card_de_resumo(item: dict) -> Projeto:
     if faixa in _FAIXAS and percentual is not None:
         p = _numero(percentual)
         card["mostra_consumo"] = True
-        card["percentual_texto"] = f"{p:.1f}%"
+        card["percentual_texto"] = percentual_br(p)
         card["barra_valor"] = int(round(min(max(p, 0.0), 100.0)))
         card["faixa_cor"], card["faixa_rotulo"] = _FAIXAS[faixa]
     return card
@@ -213,6 +259,7 @@ class ProjetosState(rx.State):
     loading: bool = False
     error_message: str = ""
     aviso_consumo: str = ""
+    aviso_form: str = ""
 
     # Formulário (criar/editar).
     form_aberto: bool = False
@@ -221,11 +268,19 @@ class ProjetosState(rx.State):
     form_nome: str = ""
     form_codigo: str = ""
     form_budget: str = ""
+    form_email_devops: str = ""
+    remover_email: bool = False
     form_error: str = ""
     form_loading: bool = False
 
     async def _auth(self) -> AuthState:
         return await self.get_state(AuthState)
+
+    @rx.event
+    async def mudar_mes(self, valor: str):
+        periodo = await self.get_state(PeriodoState)
+        periodo.mes = valor
+        yield ProjetosState.carregar
 
     @rx.event
     async def carregar(self):
@@ -241,14 +296,20 @@ class ProjetosState(rx.State):
         self.aviso_consumo = ""
         yield
 
-        status, corpo = await _buscar("/projetos-resumo-consumo-mtd", auth.token)
+        mes = (await self.get_state(PeriodoState)).preparar()
+        status, painel = await _buscar("/painel", auth.token, params=parametro_mes(mes))
+        corpo = painel.get("resumo") if status == 200 and isinstance(painel, dict) else None
+        if status != 401 and itens_do_resumo(corpo) is None:
+            # Painel indisponível: tenta o resumo individual antes da lista simples.
+            status, corpo = await _buscar("/projetos-resumo-consumo-mtd", auth.token, params=parametro_mes(mes))
         if status == 401:
             self.loading = False
             yield AuthState.handle_unauthenticated
             return
         itens = itens_do_resumo(corpo) if status == 200 else None
         if itens is not None:
-            self.projetos = [card_de_resumo(p) for p in itens]
+            corrente = corpo.get("mes_corrente", True) is not False
+            self.projetos = [card_de_resumo(p, corrente) for p in ordenar_itens(itens)]
             self.loading = False
             return
 
@@ -267,11 +328,13 @@ class ProjetosState(rx.State):
             self.aviso_consumo = ""
             self.error_message = MENSAGEM_ERRO_PROJETOS
             return
-        self.projetos = [_card_base(p) for p in corpo if isinstance(p, dict)]
+        self.projetos = [_card_base(p) for p in ordenar_itens([p for p in corpo if isinstance(p, dict)])]
         self.loading = False
 
     @rx.event
     def abrir_criar(self):
+        self._limpar_email()
+        self.aviso_form = ""
         self.form_modo = "criar"
         self.form_id = 0
         self.form_nome = ""
@@ -282,17 +345,36 @@ class ProjetosState(rx.State):
 
     @rx.event
     def abrir_editar(self, projeto: Projeto):
+        self._limpar_email()
+        self.aviso_form = ""
         self.form_modo = "editar"
         self.form_id = projeto["id"]
         self.form_nome = projeto["nome"]
         self.form_codigo = projeto["codigo"]
-        self.form_budget = str(projeto["budget"])
+        self.form_budget = numero_br(projeto["budget"])
         self.form_error = ""
         self.form_aberto = True
 
     @rx.event
     def fechar_form(self):
         self.form_aberto = False
+        self._limpar_email()
+
+    def _limpar_email(self):
+        self.form_email_devops = ""
+        self.remover_email = False
+
+    @rx.event
+    def set_form_email_devops(self, valor: str):
+        self.form_email_devops = valor
+        self.remover_email = False
+        self.form_error = ""
+
+    @rx.event
+    def confirmar_remocao(self):
+        self.form_email_devops = ""
+        self.remover_email = True
+        self.form_error = ""
 
     @rx.event
     def set_form_nome(self, v: str):
@@ -306,7 +388,7 @@ class ProjetosState(rx.State):
 
     @rx.event
     def set_form_budget(self, v: str):
-        self.form_budget = v
+        self.form_budget = mascarar_orcamento(v)
         self.form_error = ""
 
     @rx.event
@@ -314,7 +396,10 @@ class ProjetosState(rx.State):
         """Cria ou edita o projeto (admin). Validações finais são do backend."""
         auth = await self._auth()
         if not auth.token:
-            return AuthState.handle_unauthenticated
+            yield AuthState.handle_unauthenticated
+            return
+        if not auth.is_admin or self.form_loading or not self.form_aberto:
+            return
 
         # Validação leve no cliente (apenas UX; o backend é autoritativo).
         if self.form_modo == "criar" and not self.form_codigo.strip():
@@ -324,8 +409,11 @@ class ProjetosState(rx.State):
             self.form_error = "Informe o nome do projeto."
             return
         try:
-            budget = float(self.form_budget.replace(",", "."))
+            budget = ler_orcamento(self.form_budget)
         except ValueError:
+            self.form_error = "Informe um orçamento válido (número)."
+            return
+        if not math.isfinite(budget):
             self.form_error = "Informe um orçamento válido (número)."
             return
         if budget < 0:
@@ -334,37 +422,42 @@ class ProjetosState(rx.State):
 
         self.form_loading = True
         self.form_error = ""
-        base = get_xano_app_base_url()
-        headers = {"Authorization": f"Bearer {auth.token}"}
-
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                if self.form_modo == "criar":
-                    resp = await client.post(
-                        f"{base}/projetos",
-                        json={"nome": self.form_nome.strip(), "codigo": self.form_codigo.strip(), "budget": budget},
-                        headers=headers,
-                    )
-                else:
-                    resp = await client.patch(
-                        f"{base}/projetos/{self.form_id}",
-                        json={"nome": self.form_nome.strip(), "budget": budget},
-                        headers=headers,
-                    )
-        except Exception:
-            self.form_loading = False
-            self.form_error = "Não foi possível salvar o projeto."
-            return
-
+        criar = self.form_modo == "criar"
+        dados = {"nome": self.form_nome.strip(), "budget": budget}
+        if criar:
+            dados["codigo"] = self.form_codigo.strip()
+        if self.remover_email and not criar:
+            # A remoção isolada não regrava nome e orçamento de um card que pode estar antigo.
+            original = next((p for p in self.projetos if p["id"] == self.form_id), {})
+            dados = {campo: valor for campo, valor in dados.items() if original.get(campo) != valor}
+            dados["remover_email_devops"] = True
+        elif self.form_email_devops:
+            dados["email_devops"] = self.form_email_devops
+        yield
+        status, corpo = await api.requisitar(
+            "POST" if criar else "PATCH",
+            "/projetos" if criar else f"/projetos/{self.form_id}", auth.token, dados,
+        )
         self.form_loading = False
-        if resp.status_code == 401:
-            return AuthState.handle_unauthenticated
-        if resp.status_code not in (200, 201):
-            self.form_error = _mensagem_erro(resp)
+        if status == 401:
+            yield AuthState.handle_unauthenticated
             return
-
+        if status not in (200, 201):
+            padrao = "Recurso indisponível no servidor agora." if status == 404 else "Não foi possível salvar o projeto."
+            self.form_error = (corpo.get("message") if isinstance(corpo, dict) else "") or padrao
+            return
+        # Um backend anterior pode salvar o projeto e ignorar os campos novos.
+        inclui_email = "email_devops" in dados or "remover_email_devops" in dados
+        esperado = dados.get("email_devops", "").strip().lower() or None
+        confirmado = (isinstance(corpo, dict) and "email_devops" in corpo
+                      and corpo["email_devops"] == esperado and corpo.get("tem_email_devops") is bool(esperado))
+        self.aviso_form = ("Projeto salvo. Recurso indisponível no servidor agora."
+                           if inclui_email and not confirmado else "")
         self.form_aberto = False
-        return ProjetosState.carregar
+        self._limpar_email()
+        if not self.aviso_form:
+            yield sucesso("Projeto salvo.")
+        yield ProjetosState.carregar
 
     @rx.event
     async def desativar(self, projeto_id: int):
@@ -373,7 +466,7 @@ class ProjetosState(rx.State):
         if not auth.token:
             return AuthState.handle_unauthenticated
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 resp = await client.post(
                     f"{get_xano_app_base_url()}/projetos/{projeto_id}/desativar",
                     headers={"Authorization": f"Bearer {auth.token}"},
@@ -386,16 +479,17 @@ class ProjetosState(rx.State):
         if resp.status_code != 200:
             self.error_message = _mensagem_erro(resp)
             return
-        return ProjetosState.carregar
+        return [sucesso("Projeto desativado."), ProjetosState.carregar]
 
 
-async def _buscar(caminho: str, token: str) -> tuple[int, Any]:
+async def _buscar(caminho: str, token: str, params: dict | None = None) -> tuple[int, Any]:
     """GET autenticado no api_group `app`. Falha de rede ou JSON inválido -> (0, None)."""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with cliente_xano(30) as client:
             resp = await client.get(
                 f"{get_xano_app_base_url()}{caminho}",
                 headers={"Authorization": f"Bearer {token}"},
+                params=params,
             )
     except Exception:
         return 0, None

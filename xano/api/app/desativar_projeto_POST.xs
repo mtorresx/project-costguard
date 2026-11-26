@@ -19,7 +19,7 @@ query "projetos/{id}/desativar" verb=POST {
       error = "Token inválido ou expirado"
     }
 
-    precondition ($usuario_logado.role == "admin") {
+    precondition ($usuario_logado.status == "ativo" && $usuario_logado.role == "admin") {
       error_type = "accessdenied"
       error = "Acesso negado"
     }

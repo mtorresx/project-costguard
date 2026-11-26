@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "corpo": [
+    {
+      "id": 6,
+      "nome": "TESTE_ALERTA_86520 X",
+      "codigo": "TESTE_ALERTA_86520",
+      "budget": 30,
+      "status": "inativo",
+      "tem_email_devops": false
+    },
+    {
+      "id": 5,
+      "nome": "Portal Web",
+      "codigo": "PORTAL",
+      "budget": 1500,
+      "status": "ativo",
+      "tem_email_devops": true
+    },
+    {
+      "id": 4,
+      "nome": "Marketing",
+      "codigo": "MARKETING",
+      "budget": 480,
+      "status": "ativo",
+      "tem_email_devops": false
+    }
+  ]
+}

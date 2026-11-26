@@ -64,8 +64,8 @@ Mock, o sistema SHALL normalizar a base removendo eventual barra final, de modo 
 
 #### Scenario: Base com barra final não gera barra dupla
 
-- **WHEN** `MOCK_BASE_URL` termina com barra (ex.: `https://aws-mock.costguard.com.br/`)
-- **THEN** a URL montada é `https://aws-mock.costguard.com.br/aws/<conta>/ce/`, sem barra dupla
+- **WHEN** `MOCK_BASE_URL` termina com barra (ex.: `https://<URL-DO-SIMULADOR>/`)
+- **THEN** a URL montada é `https://<URL-DO-SIMULADOR>/aws/<conta>/ce/`, sem barra dupla
 
 #### Scenario: Destino real quando Mock desativado
 
@@ -78,7 +78,7 @@ O sistema SHALL usar uma única implementação de SigV4 para provedores reais e
 os componentes que dependem do destino de modo que a assinatura corresponda sempre ao host e ao
 canonical URI efetivamente usados na requisição. Quando `usar_mock = false`, a assinatura SHALL
 usar host `ce.us-east-1.amazonaws.com` e canonical URI `/` (comportamento atual). Quando
-`usar_mock = true`, a assinatura SHALL usar host `aws-mock.costguard.com.br` (derivado de
+`usar_mock = true`, a assinatura SHALL usar host `<URL-DO-SIMULADOR>` (derivado de
 `MOCK_BASE_URL`) e canonical URI `/aws/{identificador_conta}/ce/`, que são o host e o path da
 requisição efetivamente enviada. O sistema MUST NOT assinar com o host AWS real e enviar a
 requisição ao Mock, nem vice-versa. O sistema MUST NOT criar uma segunda implementação de SigV4.
@@ -87,7 +87,7 @@ O `service` (`ce`) e a `region` (`us-east-1`) permanecem os mesmos nos dois caso
 #### Scenario: Assinatura Mock usa host e URI do Mock
 
 - **WHEN** a coleta ou o teste é executado para um provedor `usar_mock = true` com `identificador_conta = <conta>`
-- **THEN** a requisição é assinada com host `aws-mock.costguard.com.br` e canonical URI `/aws/<conta>/ce/`, coerentes com a URL de destino
+- **THEN** a requisição é assinada com host `<URL-DO-SIMULADOR>` e canonical URI `/aws/<conta>/ce/`, coerentes com a URL de destino
 
 #### Scenario: Assinatura real inalterada
 
@@ -129,7 +129,7 @@ reais ao Mock e MUST NOT usar credenciais de um provedor Mock em endpoints AWS r
 O sistema SHALL, quando `usar_mock = true`, testar a conexão SEM chamar STS. O teste SHALL
 chamar o Cost Explorer do Mock com `X-Amz-Target: AWSInsightsIndexService.GetTags`, corpo
 contendo `TagKey = PRJ` e um `TimePeriod` válido, assinado via SigV4 coerente com o destino do
-Mock (host `aws-mock.costguard.com.br`, canonical URI `/aws/{identificador_conta}/ce/`). O teste
+Mock (host `<URL-DO-SIMULADOR>`, canonical URI `/aws/{identificador_conta}/ce/`). O teste
 SHALL validar: o endpoint, o Account ID, a comunicação HTTPS, o contrato AWS JSON do Cost
 Explorer e a execução da assinatura SigV4 pelo CostGuard. Uma resposta HTTP 2xx no contrato
 esperado SHALL resultar em conexão OK **mesmo que a lista de Tags venha vazia**. O teste MUST NOT

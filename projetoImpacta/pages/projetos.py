@@ -10,7 +10,9 @@ prontos do backend (`GET /projetos-resumo-consumo-mtd`).
 import reflex as rx
 
 from .. import theme as t
+from ..components.mensagens import aviso_fechavel
 from ..components.layout import app_shell
+from ..components.periodo_state import seletor_mes
 from ..state import AuthState
 from .projetos_state import Projeto, ProjetosState
 
@@ -33,7 +35,7 @@ def _card(projeto: Projeto) -> rx.Component:
             rx.hstack(
                 rx.vstack(
                     rx.text(projeto["nome"], font_size="17px", font_weight="600", color=t.TEXT_HIGH),
-                    rx.text("PRJ_" + projeto["codigo"], font_size="12px", color=t.TEXT_MED),
+                    rx.text(projeto["codigo"], font_size="12px", color=t.TEXT_MED),
                     spacing="1",
                     align="start",
                 ),
@@ -44,7 +46,7 @@ def _card(projeto: Projeto) -> rx.Component:
             ),
             rx.box(
                 rx.text(
-                    "Custo classificado (MTD)",
+                    "Custo classificado no mês",
                     font_size="11px",
                     font_weight="600",
                     color=t.TEXT_MED,
@@ -139,20 +141,73 @@ def _card(projeto: Projeto) -> rx.Component:
     )
 
 
-def _campo(label: str, value, on_change, placeholder: str = "", tipo: str = "text", disabled=False) -> rx.Component:
+def _campo(label: str, value, on_change, placeholder: str = "", disabled=False) -> rx.Component:
     return rx.vstack(
         rx.text(label, size="2", weight="medium", color=t.TEXT_MED),
         rx.input(
             value=value,
             on_change=on_change,
             placeholder=placeholder,
-            type=tipo,
             disabled=disabled,
             width="100%",
         ),
         spacing="1",
         width="100%",
         align="start",
+    )
+
+
+def _campo_orcamento() -> rx.Component:
+    return rx.vstack(
+        rx.el.label("Orçamento mensal (US$)", html_for="orcamento-mensal", size="2", color=t.TEXT_MED),
+        rx.debounce_input(
+            rx.input(
+                id="orcamento-mensal", input_mode="numeric", placeholder="0,00", width="100%",
+                on_change=ProjetosState.set_form_budget,
+            ),
+            value=ProjetosState.form_budget, debounce_timeout=0,
+        ),
+        spacing="1", width="100%", align="start",
+    )
+
+
+def _email_devops() -> rx.Component:
+    return rx.vstack(
+        rx.el.label("E-mail do DevOps", html_for="projeto-email-devops", color=t.TEXT_MED),
+        rx.input(
+            id="projeto-email-devops", type="email", width="100%",
+            value=ProjetosState.form_email_devops, on_change=ProjetosState.set_form_email_devops,
+            disabled=ProjetosState.form_loading,
+        ),
+        rx.cond(
+            ProjetosState.form_modo == "editar",
+            rx.vstack(
+                rx.text(
+                    rx.cond(ProjetosState.remover_email, "O e-mail será removido ao salvar.",
+                            "Deixe em branco para manter o e-mail atual."),
+                    size="1", color=t.TEXT_MED,
+                ),
+                rx.cond(
+                    ProjetosState.remover_email,
+                    rx.button("Desfazer remoção", on_click=ProjetosState.set_form_email_devops(""), variant="soft"),
+                    rx.alert_dialog.root(
+                        rx.alert_dialog.trigger(rx.button("Remover e-mail", variant="soft", color_scheme="red")),
+                        rx.alert_dialog.content(
+                            rx.alert_dialog.title("Remover o e-mail do DevOps?"),
+                            rx.alert_dialog.description("Ao salvar, este projeto ficará sem destinatário para notificações."),
+                            rx.flex(
+                                rx.alert_dialog.cancel(rx.button("Cancelar", variant="soft")),
+                                rx.alert_dialog.action(rx.button("Confirmar remoção", color_scheme="red",
+                                                                on_click=ProjetosState.confirmar_remocao)),
+                                gap="3", justify="end", margin_top="16px",
+                            ),
+                        ),
+                    ),
+                ),
+                align="start", spacing="2",
+            ),
+        ),
+        width="100%", align="start", spacing="1",
     )
 
 
@@ -172,10 +227,11 @@ def _form_modal() -> rx.Component:
                     "PAGAMENTOS",
                     disabled=ProjetosState.form_modo == "editar",
                 ),
-                _campo("Orçamento mensal (US$)", ProjetosState.form_budget, ProjetosState.set_form_budget, "10000", tipo="number"),
+                _campo_orcamento(),
+                _email_devops(),
                 rx.cond(
                     ProjetosState.form_error != "",
-                    rx.callout(ProjetosState.form_error, color_scheme="red", size="1", width="100%"),
+                    aviso_fechavel(ProjetosState.form_error),
                     rx.fragment(),
                 ),
                 rx.hstack(
@@ -211,11 +267,12 @@ def _conteudo() -> rx.Component:
             rx.hstack(
                 rx.vstack(
                     rx.heading("Projetos", size="7", color=t.TEXT_HIGH),
-                    rx.text("Orçamento mensal por projeto.", color=t.TEXT_MED, size="2"),
+                    rx.text("Orçamento mensal por projeto, do maior consumo para o menor.", color=t.TEXT_MED, size="2"),
                     spacing="1",
                     align="start",
                 ),
                 rx.spacer(),
+                seletor_mes(ProjetosState.mudar_mes),
                 rx.cond(
                     AuthState.is_admin,
                     rx.button(
@@ -234,16 +291,16 @@ def _conteudo() -> rx.Component:
             ),
             rx.cond(
                 ProjetosState.error_message != "",
-                rx.callout(ProjetosState.error_message, color_scheme="red", size="1", width="100%"),
+                aviso_fechavel(ProjetosState.error_message),
                 rx.fragment(),
             ),
             rx.cond(
                 ProjetosState.aviso_consumo != "",
-                rx.callout(ProjetosState.aviso_consumo, color_scheme="amber", size="1", width="100%"),
+                aviso_fechavel(ProjetosState.aviso_consumo),
                 rx.fragment(),
             ),
             rx.cond(
-                ProjetosState.loading,
+                ProjetosState.loading & (ProjetosState.projetos.length() == 0),
                 rx.center(rx.spinner(size="3"), padding_y="8"),
                 rx.cond(
                     ProjetosState.projetos.length() > 0,
@@ -259,7 +316,8 @@ def _conteudo() -> rx.Component:
                     ),
                 ),
             ),
-            _form_modal(),
+            rx.cond(ProjetosState.aviso_form != "", aviso_fechavel(ProjetosState.aviso_form)),
+            rx.cond(AuthState.is_admin, _form_modal()),
             spacing="6",
             width="100%",
             max_width="1100px",

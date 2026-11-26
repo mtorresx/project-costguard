@@ -51,7 +51,7 @@ context: |
   Source of truth:
     docs/project-overview.md contém a visão global do projeto.
     docs/domain-model.md contém os conceitos e relacionamentos do domínio.
-    AGENTS.md contém as regras operacionais para agentes.
+    As regras operacionais do projeto estabelecem como os agentes devem atuar.
     openspec/specs/ contém o comportamento consolidado através das changes.
 
   Language:

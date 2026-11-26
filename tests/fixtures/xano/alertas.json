@@ -1,0 +1,53 @@
+{
+  "status": 200,
+  "corpo": [
+    {
+      "id": 2,
+      "tipo": "nao_classificado",
+      "nivel": "atencao",
+      "mensagem": "7 recursos sem projeto válido no provedor AWS-DATA",
+      "detalhe": "Corrija a tag de projeto (PRJ) na origem. Enquanto isso, o custo desses recursos fica fora dos orçamentos.",
+      "projeto_id": 0,
+      "projeto_nome": null,
+      "provedor_id": 3,
+      "provedor_nome": "AWS-DATA",
+      "resolvido": false,
+      "resolucao": "",
+      "resolvido_em": 0,
+      "criado_em": 1793713889114,
+      "atualizado_em": 1794604084595
+    },
+    {
+      "id": 1,
+      "tipo": "nao_classificado",
+      "nivel": "atencao",
+      "mensagem": "9 recursos sem projeto válido no provedor AWS-DEV",
+      "detalhe": "Corrija a tag de projeto (PRJ) na origem. Enquanto isso, o custo desses recursos fica fora dos orçamentos.",
+      "projeto_id": 0,
+      "projeto_nome": null,
+      "provedor_id": 2,
+      "provedor_nome": "AWS-DEV",
+      "resolvido": false,
+      "resolucao": "",
+      "resolvido_em": 0,
+      "criado_em": 1793713889074,
+      "atualizado_em": 1794604041095
+    },
+    {
+      "id": 6,
+      "tipo": "nao_classificado",
+      "nivel": "atencao",
+      "mensagem": "1 recurso sem projeto válido no provedor prdo",
+      "detalhe": "Corrija a tag de projeto () na origem. Enquanto isso, o custo desses recursos fica fora dos orçamentos.",
+      "projeto_id": 0,
+      "projeto_nome": null,
+      "provedor_id": 4,
+      "provedor_nome": "prdo",
+      "resolvido": true,
+      "resolucao": "automatica",
+      "resolvido_em": 1794608634709,
+      "criado_em": 1794608115194,
+      "atualizado_em": 1794608634709
+    }
+  ]
+}

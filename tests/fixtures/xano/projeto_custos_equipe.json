@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "corpo": {
+    "projeto_id": 5,
+    "intervalo": {
+      "inicio": "2026-11-01",
+      "fim": "2026-11-13"
+    },
+    "moeda": null,
+    "equipes": [],
+    "sem_responsavel": {
+      "total": 0
+    },
+    "total_projeto": 0
+  }
+}

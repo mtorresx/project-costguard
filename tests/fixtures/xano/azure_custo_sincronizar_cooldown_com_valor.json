@@ -1,0 +1,14 @@
+{
+  "provedor": "azure",
+  "configurado": true,
+  "status": "ok",
+  "nao_alocado": true,
+  "custo_mes_total": 123.45,
+  "moeda": "USD",
+  "atualizado_em": 1790000000000,
+  "mes_referencia": "2026-11",
+  "erro_resumo": null,
+  "proxima_leitura_em": 1790000060000,
+  "origem": "cooldown",
+  "origem_credencial": "servidor"
+}

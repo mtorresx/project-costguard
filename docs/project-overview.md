@@ -8,7 +8,7 @@ Seu objetivo é permitir que uma organização identifique não apenas quanto es
 
 O sistema utiliza informações de custo e tags existentes nos recursos da nuvem para realizar automaticamente a classificação dos gastos, consolidá-los por projeto, compará-los com orçamentos mensais e gerar alertas quando situações que exigem atenção forem identificadas.
 
-A primeira versão do projeto será voltada para AWS.
+O projeto é voltado principalmente para AWS. Há também suporte à leitura do custo mensal do Azure, ainda não validado com valores reais.
 
 ## 2. Problema
 
@@ -66,10 +66,10 @@ Os usuários do sistema não são vinculados diretamente a projetos ou equipes. 
 
 ## 5. Escopo inicial
 
-A primeira versão do CostGuard deverá contemplar:
+O escopo do CostGuard contempla:
 
 - autenticação de usuários;
-- recuperação e redefinição de senha;
+- recuperação e redefinição de senha (não implementado na versão atual);
 - gerenciamento de usuários;
 - gerenciamento de projetos;
 - definição de orçamento mensal por projeto;
@@ -83,7 +83,7 @@ A primeira versão do CostGuard deverá contemplar:
 - geração de alertas;
 - visualização das informações em dashboard.
 
-A primeira implementação utilizará AWS como provedor cloud.
+O provedor cloud principal é a AWS; o Azure tem apenas suporte à leitura do custo mensal, ainda não validado com valores reais.
 
 ## 6. Principais funcionalidades
 
@@ -93,7 +93,7 @@ O sistema deverá possuir autenticação por nome de usuário e senha.
 
 Não haverá autocadastro. Usuários serão criados por um administrador.
 
-O e-mail será utilizado como canal para recuperação de acesso.
+O e-mail é previsto como canal para recuperação de acesso, mas a recuperação de senha não está implementada na versão atual: um administrador define uma nova senha em **Usuários**.
 
 ### Projetos
 
@@ -162,7 +162,7 @@ As seguintes regras devem ser preservadas durante o desenvolvimento:
 - falhas de importação não devem ocorrer silenciosamente;
 - custos não devem ser descartados por problemas de classificação;
 - a reatribuição de recursos deve ocorrer através das tags do provedor;
-- mensagens de autenticação e recuperação de acesso não devem permitir enumeração de usuários.
+- mensagens de autenticação (e, quando existir, de recuperação de acesso) não devem permitir enumeração de usuários.
 
 ## 8. Arquitetura tecnológica
 
@@ -186,28 +186,18 @@ O armazenamento utilizado pelo backend será o banco disponibilizado pelo Xano.
 
 ### Integração cloud
 
-A primeira versão será integrada à AWS.
+A integração principal é com a AWS.
 
-Outros provedores poderão ser considerados futuramente, mas não fazem parte da primeira entrega.
-
-### Desenvolvimento assistido por IA
-
-O projeto utilizará Kiro IDE como ambiente de desenvolvimento assistido por Inteligência Artificial.
-
-O agente deverá trabalhar a partir da documentação do projeto e das especificações produzidas através do OpenSpec.
+Há também suporte à leitura do custo mensal do Azure, ainda não validado com valores reais. Outros provedores poderão ser considerados futuramente.
 
 ## 9. Princípios de desenvolvimento
 
-O desenvolvimento seguirá os seguintes princípios:
+O projeto segue os seguintes princípios:
 
-- desenvolvimento incremental;
 - mudanças pequenas e verificáveis;
-- uso de OpenSpec para mudanças relevantes;
-- não implementar requisitos não aprovados;
 - evitar duplicação desnecessária;
 - manter separação clara entre frontend e backend;
-- utilizar documentação oficial das tecnologias quando necessário;
-- revisar código e alterações geradas por agentes de IA.
+- utilizar a documentação oficial das tecnologias.
 
 ## 10. Segurança e integridade
 
@@ -225,9 +215,9 @@ Por esse motivo:
 
 ## 11. Fora do escopo inicial
 
-Não fazem parte da primeira versão:
+Não fazem parte do escopo:
 
-- múltiplos provedores cloud simultâneos;
+- múltiplos provedores cloud com o mesmo nível de suporte da AWS (do Azure há apenas a leitura do custo mensal, ainda não validada com valores reais);
 - orçamento trimestral ou anual;
 - orçamento individual por equipe;
 - rateio de custos entre equipes;
@@ -237,36 +227,13 @@ Não fazem parte da primeira versão:
 - conversão entre moedas;
 - auditoria completa das alterações realizadas no sistema.
 
-O orçamento inicial será mensal e expresso em USD.
+O orçamento é mensal e expresso em USD.
 
-## 12. Estratégia de desenvolvimento
+## 12. Documentação
 
-O projeto será desenvolvido de forma incremental utilizando OpenSpec.
-
-O fluxo esperado será:
-
-1. compreender e documentar o contexto global;
-2. executar Explore;
-3. definir uma mudança através de Propose;
-4. revisar proposal, specs, design e tasks;
-5. implementar através de Apply;
-6. verificar a implementação;
-7. arquivar a change concluída;
-8. iniciar a próxima mudança.
-
-A existência de uma funcionalidade na visão global do CostGuard não significa que ela deverá ser implementada imediatamente.
-
-A implementação deverá ocorrer de acordo com as changes aprovadas.
-
-## 13. Fonte de verdade e documentação
-
-A documentação do projeto é dividida por responsabilidade.
+A documentação do projeto é dividida por responsabilidade:
 
 - `docs/project-overview.md` apresenta a visão global do CostGuard;
-- `docs/domain-model.md` descreve os conceitos e relacionamentos do domínio;
-- `AGENTS.md` define como os agentes de IA devem trabalhar no projeto;
-- `openspec/config.yaml` fornece contexto permanente aos workflows do OpenSpec;
-- `openspec/specs/` representa o comportamento consolidado do sistema;
-- `openspec/changes/` contém mudanças em planejamento ou implementação.
+- `docs/domain-model.md` descreve os conceitos e relacionamentos do domínio.
 
-Quando houver conflito ou informação ausente, a implementação não deve assumir uma solução sem que a decisão seja analisada e registrada.
+Nem toda funcionalidade descrita na visão global está implementada; os limites atuais constam no `README.md` (seção Limitações).

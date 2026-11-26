@@ -12,6 +12,17 @@ query "projetos/{id}/custos-equipe" verb=GET {
   }
 
   stack {
+    // P2-10: usuário desativado (ou removido) perde também o acesso às leituras.
+    db.get usuarios {
+      field_name = "id"
+      field_value = $auth.id
+    } as $usuario_sessao
+
+    precondition ($usuario_sessao != null && $usuario_sessao.status == "ativo") {
+      error_type = "unauthorized"
+      error = "Token inválido ou expirado"
+    }
+
     // Qualquer usuário autenticado pode ler (auth garante 401 sem token).
     // Somente leitura: nunca dispara coleta nem escrita.
     db.get projetos {
@@ -173,4 +184,5 @@ query "projetos/{id}/custos-equipe" verb=GET {
   }
 
   response = $resposta
+  guid = "tsE3H7JqL8MrgMwKBy8byncj1Ko"
 }

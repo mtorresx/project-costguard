@@ -9,6 +9,17 @@ query "provedores/{id}" verb=GET {
   }
 
   stack {
+    // P2-10: usuário desativado (ou removido) perde também o acesso às leituras.
+    db.get usuarios {
+      field_name = "id"
+      field_value = $auth.id
+    } as $usuario_sessao
+
+    precondition ($usuario_sessao != null && $usuario_sessao.status == "ativo") {
+      error_type = "unauthorized"
+      error = "Token inválido ou expirado"
+    }
+
     db.get provedores {
       field_name = "id"
       field_value = $input.id
@@ -29,7 +40,6 @@ query "provedores/{id}" verb=GET {
         tipo_credencial    : $provedor.tipo_credencial
         tag_alocacao_projeto: $provedor.tag_alocacao_projeto
         tag_alocacao_equipe: $provedor.tag_alocacao_equipe
-        usar_mock          : $provedor.usar_mock
         status             : $provedor.status
       }
     }

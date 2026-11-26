@@ -22,7 +22,7 @@ query "provedores/{id}/descobrir-projetos" verb=POST {
       error = "Token inválido ou expirado"
     }
 
-    precondition ($usuario_logado.role == "admin") {
+    precondition ($usuario_logado.status == "ativo" && $usuario_logado.role == "admin") {
       error_type = "accessdenied"
       error = "Acesso negado"
     }
@@ -60,11 +60,6 @@ query "provedores/{id}/descobrir-projetos" verb=POST {
       error = "Credencial AWS ausente"
     }
 
-    precondition ($provedor.tag_alocacao_projeto != null && $provedor.tag_alocacao_projeto != "") {
-      error_type = "inputerror"
-      error = "Tag de alocação de projeto não configurada no provedor"
-    }
-
     // ============================================================
     // B) Decifra o secret (SÓ em memória, imediatamente antes de assinar).
     // ============================================================
@@ -72,54 +67,18 @@ query "provedores/{id}/descobrir-projetos" verb=POST {
       value = $provedor.aws_secret_cifrado|jwe_decode:{}:$env.PROV_ENC_KEY:"A256KW":"A256CBC-HS512"
     }
 
-    var $tag_key { value = $provedor.tag_alocacao_projeto }
+    // Fallback "PRJ" para provedores sem Tag Key de projeto gravada (mesma
+    // convenção do fallback "EQP" da equipe).
+    var $tag_key_prj_raw { value = ($provedor.tag_alocacao_projeto ?? "") }
+    var $tag_key { value = (($tag_key_prj_raw|trim) != "") ? $tag_key_prj_raw : "PRJ" }
 
     // ============================================================
-    // B.1) Resolução do destino (AWS real x AWS Mock) e dos componentes da
-    //      assinatura dependentes do destino. UMA única implementação SigV4:
-    //      apenas host, canonical URI e URL mudam conforme usar_mock.
-    //      usar_mock=false NÃO lê nem depende de MOCK_BASE_URL.
+    // B.1) Destino (AWS Cost Explorer) e componentes da assinatura
+    //      dependentes do destino.
     // ============================================================
-    var $eh_mock { value = ($provedor.usar_mock == true) }
-
-    // Defaults = AWS real (comportamento atual, inalterado).
     var $sig_host { value = "ce.us-east-1.amazonaws.com" }
     var $canonical_uri { value = "/" }
     var $sig_endpoint { value = "https://ce.us-east-1.amazonaws.com/" }
-
-    conditional {
-      if ($eh_mock == true) {
-        precondition ($env.MOCK_BASE_URL != null && $env.MOCK_BASE_URL != "") {
-          error_type = "inputerror"
-          error = "Ambiente Mock não configurado (MOCK_BASE_URL ausente)"
-        }
-        var $mock_base_raw { value = $env.MOCK_BASE_URL }
-        var $mock_base_len { value = $mock_base_raw|strlen }
-        var $mock_base_ultimo { value = $mock_base_raw|substr:($mock_base_len - 1) }
-        var $mock_base_norm { value = $mock_base_raw }
-        conditional {
-          if ($mock_base_ultimo == "/") {
-            var.update $mock_base_norm { value = $mock_base_raw|substr:0:($mock_base_len - 1) }
-          }
-        }
-        var $mock_host { value = $mock_base_norm }
-        conditional {
-          if ($mock_base_norm|starts_with:"https://") {
-            var.update $mock_host { value = $mock_base_norm|substr:8 }
-          }
-          else {
-            conditional {
-              if ($mock_base_norm|starts_with:"http://") {
-                var.update $mock_host { value = $mock_base_norm|substr:7 }
-              }
-            }
-          }
-        }
-        var.update $sig_host { value = $mock_host }
-        var.update $canonical_uri { value = "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
-        var.update $sig_endpoint { value = $mock_base_norm ~ "/aws/" ~ $provedor.identificador_conta ~ "/ce/" }
-      }
-    }
 
     // ============================================================
     // C) Intervalo (GetTags exige TimePeriod). Start inclusivo / End exclusivo;
@@ -302,11 +261,24 @@ query "provedores/{id}/descobrir-projetos" verb=POST {
       }
       else {
         // Falha: diagnóstico sanitizado (sem segredo/Authorization/JWE).
+        var $erro_tipo { value = null }
+        var $erro_msg_alt { value = null }
+        // AWS JSON 1.1 devolve o erro em "__type"/"message";
+        // a Query API devolve em Error.Code/Error.Message. Lê os dois.
+        try_catch {
+          try {
+            var.update $erro_tipo { value = $gt_result.response.result|get:"__type":null }
+            var.update $erro_msg_alt { value = $gt_result.response.result|get:"message":null }
+          }
+          catch {
+            var.update $erro_tipo { value = null }
+          }
+        }
         var.update $diagnostico {
           value = {
             http_status: ($gt_result != null) ? $gt_result.response.status : null
-            error_code : ($gt_result.response.result.Error.Code ?? null)
-            error_msg  : ($gt_result.response.result.Error.Message ?? null)
+            error_code : ($gt_result.response.result.Error.Code ?? $erro_tipo)
+            error_msg  : ($gt_result.response.result.Error.Message ?? $erro_msg_alt)
             request_id : ($gt_result.response.result.RequestId ?? null)
           }
         }

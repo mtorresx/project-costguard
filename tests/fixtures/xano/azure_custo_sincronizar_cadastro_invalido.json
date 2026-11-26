@@ -1,0 +1,14 @@
+{
+  "provedor": "azure",
+  "configurado": false,
+  "status": "configuracao_invalida",
+  "nao_alocado": true,
+  "custo_mes_total": null,
+  "moeda": null,
+  "atualizado_em": null,
+  "mes_referencia": null,
+  "erro_resumo": "O cadastro do Azure guardado no servidor não pôde ser lido. Cadastre a conexão novamente.",
+  "proxima_leitura_em": null,
+  "origem": null,
+  "origem_credencial": "tela"
+}

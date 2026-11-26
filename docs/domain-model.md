@@ -15,7 +15,7 @@ Os principais conceitos do domínio são:
 - Recurso;
 - Registro de custo;
 - Alerta;
-- Recuperação de acesso.
+- Recuperação de acesso (não implementada na versão atual).
 
 ## 2. Relacionamento geral
 
@@ -87,14 +87,14 @@ Pode consultar informações, mas não pode criar, alterar ou excluir dados.
 
 ## Relacionamentos
 
-Um usuário pode solicitar recuperação de acesso.
+Um usuário poderia solicitar recuperação de acesso; esse fluxo não está implementado na versão atual (um administrador define uma nova senha).
 
 Usuários não pertencem diretamente a projetos ou equipes.
 
 ## Regras estruturais
 
 - o nome de usuário é utilizado para autenticação;
-- o e-mail é utilizado como canal de recuperação de acesso;
+- o e-mail é previsto como canal de recuperação de acesso (recuperação não implementada na versão atual);
 - não existe autocadastro;
 - usuários não devem ser excluídos definitivamente, mas podem ser desativados;
 - o sistema deve preservar pelo menos um administrador ativo;
@@ -212,7 +212,7 @@ onde `BACKEND` representa o código da equipe. No AWS Cost Explorer esse par apa
 
 Representa uma conta ou ambiente de computação em nuvem conectado ao CostGuard.
 
-A primeira versão do projeto utilizará AWS.
+O provedor principal é a AWS. Há também suporte à leitura do custo mensal do Azure, ainda não validado com valores reais.
 
 ## Responsabilidade
 
@@ -239,41 +239,6 @@ Fornecer ao sistema informações sobre recursos, custos e tags necessárias par
 - o sistema não deve precisar criar, alterar ou excluir recursos no provedor cloud;
 - falhas de importação não podem ocorrer silenciosamente;
 - o provedor deve poder ser identificado como estando em estado normal ou com problema de integração.
-
-## Ambiente de teste: AWS Mock (opcional)
-
-Para fins de desenvolvimento e teste, um provedor AWS pode ser marcado com a característica
-`usar_mock` (booleano, default `false`). Isso NÃO cria um novo tipo de provedor: o provedor
-continua sendo do tipo AWS.
-
-- `usar_mock = false` (padrão): o provedor usa exclusivamente a AWS real (STS no teste de
-  conexão, Cost Explorer real na coleta). Este é o comportamento histórico e não depende do
-  ambiente Mock de forma alguma.
-- `usar_mock = true`: as chamadas ao Cost Explorer do provedor são direcionadas ao AWS Mock
-  Simulator, em `{MOCK_BASE_URL}/aws/{identificador_conta}/ce/`, onde `MOCK_BASE_URL` é uma
-  variável de ambiente existente **apenas no backend** (nunca exposta ao frontend) e
-  `{identificador_conta}` é o Account ID do próprio provedor.
-
-Regras e características:
-
-- **Múltiplas contas**: pode haver N provedores Mock, cada um com seu próprio apelido, Account
-  ID, Access Key e Secret. Não existe Account ID global nem credenciais Mock embutidas no
-  código; os nomes de laboratório (ex.: AWS-DEV, AWS-PROD) são apenas dados de teste e podem
-  mudar quando o ambiente Mock é regenerado.
-- **Credenciais fictícias**: contas Mock devem usar SOMENTE as credenciais fictícias geradas
-  pelo AWS Mock Simulator. O Secret é cifrado pelo mesmo mecanismo JWE da AWS real, nunca
-  retornado por API e decifrado apenas em memória. Credenciais AWS reais nunca são enviadas ao
-  Mock, e credenciais Mock nunca são usadas em endpoints AWS reais.
-- **Assinatura SigV4**: a mesma implementação de SigV4 é usada nos dois casos; apenas o host, o
-  canonical URI e a URL de destino mudam conforme o destino efetivo (AWS real ou Mock), para
-  que a assinatura seja tecnicamente coerente.
-- **Teste de conexão**: com `usar_mock = true`, o teste NÃO chama STS; faz uma chamada
-  `GetTags` (TagKey `PRJ`) ao Cost Explorer do Mock. Ele valida comunicação HTTPS, endpoint,
-  Account ID, contrato do Cost Explorer e a geração/envio do fluxo SigV4 pelo CostGuard — mas
-  **não** comprova que Access Key/Secret estejam corretas, pois o Mock atualmente não valida
-  SigV4. Uma lista de Tags vazia é considerada conexão válida.
-- **Isolamento**: indisponibilidade, erro ou remoção do Mock não afeta provedores reais. O
-  caminho `usar_mock = false` não lê nem depende de `MOCK_BASE_URL`.
 
 ---
 
@@ -438,7 +403,7 @@ Permitir consolidar quanto cada recurso consumiu e, consequentemente, calcular o
 - o custo histórico nunca é reclassificado usando a equipe atual do inventário: um recurso que hoje pertence a uma equipe pode ter tido seu custo passado atribuído a outra;
 - na AWS real, as Tag Keys de projeto e de equipe precisam estar ativadas como Cost Allocation Tags para aparecerem no Cost Explorer (pré-condição operacional fora do controle do CostGuard).
 
-O detalhamento físico sobre como o histórico de custos e mudanças de classificação serão persistidos deverá ser definido durante as changes correspondentes.
+O detalhamento físico de como o histórico de custos e as mudanças de classificação são persistidos não é descrito neste documento.
 
 ---
 
@@ -526,11 +491,13 @@ Dependendo do tipo, um alerta pode estar relacionado a:
 - alertas de orçamento não devem ser repetidos continuamente sem necessidade;
 - uma faixa de orçamento deve gerar aviso apenas quando a condição correspondente for alcançada conforme a regra definida pelo sistema.
 
-O detalhamento de persistência, ciclo de vida e deduplicação dos alertas deverá ser definido na especificação da funcionalidade.
+O detalhamento de persistência, ciclo de vida e deduplicação dos alertas não é descrito neste documento.
 
 ---
 
 # 12. Recuperação de Acesso
+
+> Não implementado na versão atual. Não há recuperação de senha pela tela; um administrador define uma nova senha em **Usuários**. O conceito abaixo descreve o comportamento previsto.
 
 ## Descrição
 
@@ -553,7 +520,7 @@ Permitir redefinição segura da senha sem revelar informações indevidas sobre
 - a senha anterior não deve ser recuperável;
 - a nova senha deve substituir a representação segura anterior.
 
-Os detalhes de implementação do processo deverão ser definidos pela especificação correspondente.
+Os detalhes de implementação do processo não estão definidos.
 
 ---
 
@@ -633,7 +600,7 @@ As seguintes regras representam restrições fundamentais do CostGuard:
 
 No escopo inicial:
 
-- existe apenas um provedor cloud suportado, AWS;
+- o provedor cloud principal é a AWS; há também suporte à leitura do custo mensal do Azure, ainda não validado com valores reais;
 - orçamento é mensal;
 - a moeda utilizada é USD;
 - não existe orçamento por equipe;
@@ -644,4 +611,4 @@ No escopo inicial:
 - não existe conversão de moeda;
 - não existe auditoria completa das alterações realizadas no sistema.
 
-Essas limitações representam decisões do escopo atual e não impedem evolução futura através de novas changes.
+Essas limitações representam o escopo atual e não impedem evolução futura.

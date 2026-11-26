@@ -1,0 +1,57 @@
+{
+  "real_clienttype_retry_after": [
+    "Content-Type: application/json; charset=utf-8",
+    "x-ms-ratelimit-microsoft.costmanagement-clienttype-retry-after: 7",
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-remaining: 9"
+  ],
+  "somente_qpu": [
+    "Content-Type: application/json",
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-retry-after: 25"
+  ],
+  "qpu_e_retry_after": [
+    "Retry-After: 90",
+    "X-MS-RateLimit-Microsoft.CostManagement-QPU-Retry-After: 25"
+  ],
+  "somente_retry_after": [
+    "Retry-After: 30"
+  ],
+  "sem_cabecalho": [
+    "Content-Type: application/json"
+  ],
+  "acima_do_teto": [
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-retry-after: 999999"
+  ],
+  "zero": [
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-retry-after: 0"
+  ],
+  "retry_after_data_http": [
+    "Retry-After: Wed, 21 Oct 2026 07:28:00 GMT"
+  ],
+  "valor_nao_numerico": [
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-retry-after: abc"
+  ],
+  "qpu_maior_que_retry_after": [
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-retry-after: 120",
+    "Retry-After: 30"
+  ],
+  "maior_entre_clienttype_qpu_e_padrao": [
+    "Retry-After: 10",
+    "x-ms-ratelimit-microsoft.costmanagement-clienttype-retry-after: 7",
+    "X-MS-RateLimit-Microsoft.CostManagement-QPU-Retry-After: 15"
+  ],
+  "retry_after_no_meio_do_nome": [
+    "x-exemplo-retry-after-segundos: 40",
+    "Retry-After: 10"
+  ],
+  "remaining_nao_conta": [
+    "x-ms-ratelimit-microsoft.costmanagement-qpu-remaining: 7000",
+    "x-exemplo-limite-restante: 5000"
+  ],
+  "retry_after_ms_conta_como_segundos": [
+    "x-exemplo-retry-after-ms: 5000"
+  ],
+  "token_e_consulta_mesmo_calculo": [
+    "Retry-After: 45",
+    "Content-Type: application/json"
+  ]
+}

@@ -2,7 +2,7 @@
 
 O CostGuard já integra com a AWS real (cadastro de provedor, teste de conexão via STS,
 coleta de custos via Cost Explorer com SigV4, classificação por tag). Existe agora um
-**AWS Mock Simulator** externo e funcional (`https://aws-mock.costguard.com.br`) que
+**AWS Mock Simulator** externo e funcional (`https://<URL-DO-SIMULADOR>`) que
 expõe o contrato do Cost Explorer (`GetCostAndUsage`, `GetTags`) por conta, permitindo
 exercitar os fluxos reais (armazenamento JWE, assinatura SigV4, paginação, idempotência,
 classificação) sem depender de uma conta AWS de verdade — inclusive para habilitar o E2E
@@ -19,7 +19,7 @@ e sem criar uma arquitetura paralela.
 - **`usar_mock = false`**: comportamento atual permanece **exatamente igual** (endpoint AWS
   real, STS no teste de conexão). Nada no caminho real depende do Mock.
 - **`usar_mock = true`**: as chamadas ao Cost Explorer passam a usar
-  `https://aws-mock.costguard.com.br/aws/{identificador_conta}/ce/`, reutilizando a mesma
+  `https://<URL-DO-SIMULADOR>/aws/{identificador_conta}/ce/`, reutilizando a mesma
   implementação de SigV4, coleta e (futuramente) classificação — apenas a **URL de destino**
   muda.
 - **Teste de conexão** passa a ser condicional ao `usar_mock`:

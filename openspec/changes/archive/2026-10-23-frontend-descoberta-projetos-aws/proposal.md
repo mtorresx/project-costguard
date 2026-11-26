@@ -9,7 +9,7 @@ projetos (valores de tag), distinguir existentes de novos, selecionar os novos e
 com feedback e atualização da lista.
 
 A interface segue o design/UX já consolidado do CostGuard (tema, `app_shell`, `rx.dialog`,
-`pill`, elementos de tabela), usando o material de `C:\frontend-costguard` apenas como
+`pill`, elementos de tabela), usando o material do frontend de referência apenas como
 **referência visual** — não como contrato funcional, já que aquele protótipo usa contratos
 antigos/divergentes do backend atual.
 
@@ -32,7 +32,7 @@ antigos/divergentes do backend atual.
 
 Fora do escopo:
 
-- Alterar `C:\frontend-costguard` (somente referência) ou qualquer endpoint/lógica Xano.
+- Alterar o frontend de referência (somente referência) ou qualquer endpoint/lógica Xano.
 - Alterar classificação, coleta, Mock, schemas, autenticação backend.
 - Página nova dedicada (o fluxo vive dentro de `/provedores`).
 - Edição de orçamento no fluxo de importação (projetos nascem com budget 0, conforme o backend;
@@ -56,12 +56,12 @@ e a autorização backend permanecem conforme `autenticacao` e `descoberta-proje
 
 ## Impact
 
-- **Frontend Reflex** (`c:\projetoImpacta\projetoImpacta`):
+- **Frontend Reflex** (`projetoImpacta/`):
   - `pages/provedores.py`: botão/ação "Descobrir projetos" por provedor (admin) + modal do fluxo.
   - `pages/provedores_state.py`: estado e eventos de descoberta/seleção/importação, ou um novo
     `pages/descoberta_state.py` dedicado (ver design).
   - Reuso de `components/layout.py` (app_shell), `components/pill.py`, `components/tabela.py`,
     `theme.py`, `AuthState` e `config.get_xano_app_base_url()`.
 - **Backend/Xano, Mock, auth**: nenhuma alteração.
-- **Referência visual**: `C:\frontend-costguard` consultado apenas para padrões de UI; não
+- **Referência visual**: o frontend de referência consultado apenas para padrões de UI; não
   alterado nem importado.

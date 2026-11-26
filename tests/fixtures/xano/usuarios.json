@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "corpo": [
+    {
+      "id": 1,
+      "nome": "Usuário Exemplo",
+      "username": "usuario_exemplo",
+      "email": "usuario@exemplo.com",
+      "role": "admin",
+      "status": "ativo"
+    },
+    {
+      "id": 2,
+      "nome": "Usuário Exemplo",
+      "username": "usuario_exemplo",
+      "email": "usuario@exemplo.com",
+      "role": "leitura",
+      "status": "inativo"
+    },
+    {
+      "id": 3,
+      "nome": "Usuário Exemplo",
+      "username": "usuario_exemplo",
+      "email": "usuario@exemplo.com",
+      "role": "leitura",
+      "status": "ativo"
+    }
+  ]
+}

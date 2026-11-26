@@ -18,6 +18,7 @@ from ..components.auth_ui import (
     heading_block,
     text_input,
 )
+from ..config import URL_LANDING
 from ..state import AuthState
 from .. import theme as t
 
@@ -68,13 +69,50 @@ def _campo_usuario() -> rx.Component:
     )
 
 
+class SenhaVisivelState(rx.State):
+    """Só apresentação: alterna a senha entre oculta e visível no campo do login."""
+
+    visivel: bool = False
+
+    @rx.event
+    def alternar(self):
+        self.visivel = not self.visivel
+
+
 def _campo_senha() -> rx.Component:
     return rx.vstack(
         field_label("Senha"),
-        text_input(
-            placeholder="••••••••",
-            name="password",
-            type="password",
+        rx.box(
+            text_input(
+                placeholder="••••••••",
+                name="password",
+                type=rx.cond(SenhaVisivelState.visivel, "text", "password"),
+                padding_right="40px",
+            ),
+            rx.el.button(
+                rx.cond(
+                    SenhaVisivelState.visivel,
+                    rx.icon("eye-off", size=16),
+                    rx.icon("eye", size=16),
+                ),
+                type="button",  # não envia o formulário
+                on_click=SenhaVisivelState.alternar,
+                aria_label=rx.cond(SenhaVisivelState.visivel, "Ocultar senha", "Mostrar senha"),
+                title=rx.cond(SenhaVisivelState.visivel, "Ocultar senha", "Mostrar senha"),
+                position="absolute",
+                right="10px",
+                top="50%",
+                transform="translateY(-50%)",
+                background="transparent",
+                border="none",
+                cursor="pointer",
+                color=t.TEXT_MED,
+                display="flex",
+                align_items="center",
+                _hover={"color": t.TEXT_HIGH},
+            ),
+            position="relative",
+            width="100%",
         ),
         spacing="2",
         width="100%",
@@ -113,5 +151,32 @@ def _login_card() -> rx.Component:
     )
 
 
+def _link_voltar() -> rx.Component:
+    """Link discreto para a landing page, no canto superior esquerdo, fora do card."""
+    return rx.link(
+        rx.icon("arrow-left", size=16, aria_hidden="true"),
+        rx.text("Voltar", as_="span", display=["inline", "inline", "none"]),
+        rx.text("Voltar ao início", as_="span", display=["none", "none", "inline"]),
+        href=URL_LANDING,
+        # Com URL absoluta (produção) a landing é outra origem: navegação de documento.
+        # Sem a variável ("/"), segue a navegação interna do cliente de sempre.
+        **({"reload_document": True} if URL_LANDING != "/" else {}),
+        aria_label="Voltar para a página inicial",
+        underline="none",
+        position="absolute",
+        top="24px",
+        left=["16px", "16px", "32px"],
+        z_index="3",
+        display="inline-flex",
+        align_items="center",
+        gap="6px",
+        font_family=FONT_BODY,
+        font_size="13px",
+        color=t.LANDING_MUTED_LIGHT,
+        transition="color 0.15s ease",
+        _hover={"color": t.LANDING_ACCENT},
+    )
+
+
 def login_page() -> rx.Component:
-    return auth_page(_login_card())
+    return auth_page(_login_card(), _link_voltar())

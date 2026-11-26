@@ -38,6 +38,15 @@ table recursos {
     timestamp atualizado_em?=now {
       visibility = "private"
     }
+    // Custo mensal do recurso, em USD. Campo OPCIONAL de custo por recurso;
+    // preenchido pelo painel do Xano ou por integração futura. Sem
+    // coleta automática. ANULÁVEL e SEM padrão:
+    // null = recurso sem custo informado (nunca 0). A sincronização de inventário
+    // não lê nem grava esta coluna (db.edit/db.add listam só os campos dela).
+    // `db.edit` ignora null (e decimal 0 == null), então limpar o valor por uma
+    // API exigiria tratamento próprio; hoje a limpeza é feita pelo painel.
+    // Não entra em nenhuma soma: o total do projeto vem de custos_equipe.
+    decimal custo_mensal?
   }
 
   index = [

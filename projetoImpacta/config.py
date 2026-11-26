@@ -19,6 +19,14 @@ XANO_BASE_URL: str = os.getenv("XANO_BASE_URL", "").rstrip("/")
 XANO_APP_BASE_URL: str = os.getenv("XANO_APP_BASE_URL", "").rstrip("/")
 
 
+# Destino dos links da área do app (login) que levam à landing. Lida na compilação
+# do frontend. Em produção a landing e o app ficam em origens diferentes
+# (costguard.com.br e app.costguard.com.br), então o valor é a URL absoluta da
+# landing e a navegação deve ser de documento. Ausente, vazia ou só com espaços:
+# "/" (desenvolvimento local, navegação interna do cliente como sempre foi).
+URL_LANDING: str = os.getenv("COSTGUARD_LANDING_URL", "").strip() or "/"
+
+
 def get_xano_base_url() -> str:
     """Retorna a base do api_group de autenticação, validando que foi configurada."""
     if not XANO_BASE_URL:

@@ -1,0 +1,15 @@
+{
+  "provedor": "azure",
+  "configurado": true,
+  "status": "sem_leitura",
+  "nao_alocado": true,
+  "custo_mes_total": null,
+  "moeda": null,
+  "atualizado_em": null,
+  "mes_referencia": null,
+  "erro_resumo": null,
+  "proxima_leitura_em": null,
+  "origem": "tela",
+  "apelido": "Azure",
+  "tenant_final": "0000"
+}

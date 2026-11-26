@@ -1,0 +1,75 @@
+{
+  "status": 200,
+  "corpo": {
+    "projeto": {
+      "id": 5,
+      "nome": "Portal Web",
+      "codigo": "PORTAL",
+      "budget": 1500,
+      "status": "ativo"
+    },
+    "recursos": [
+      {
+        "id": 323,
+        "provedor_id": 3,
+        "arn": "arn:aws:s3:::bucket-5828-0064-1ec12d",
+        "regiao": "us-west-2",
+        "servico": "s3",
+        "projeto_id": 5,
+        "equipe_id": 13,
+        "codigo_projeto_tag": "PORTAL",
+        "codigo_equipe_tag": "BACKEND",
+        "sem_responsavel": false,
+        "ativo": true,
+        "descoberto_em": 1793713767371,
+        "custo_mensal": 2.0
+      },
+      {
+        "id": 303,
+        "provedor_id": 3,
+        "arn": "arn:aws:ec2:us-west-2:210987654321:instance/i-23b53319561f8f2a2",
+        "regiao": "us-west-2",
+        "servico": "ec2",
+        "projeto_id": 5,
+        "equipe_id": 12,
+        "codigo_projeto_tag": "PORTAL",
+        "codigo_equipe_tag": "WEB",
+        "sem_responsavel": false,
+        "ativo": true,
+        "descoberto_em": 1793713765531,
+        "custo_mensal": 6.0
+      },
+      {
+        "id": 301,
+        "provedor_id": 3,
+        "arn": "arn:aws:s3:::bucket-5828-0058-6071ec",
+        "regiao": "us-east-1",
+        "servico": "s3",
+        "projeto_id": 5,
+        "equipe_id": 12,
+        "codigo_projeto_tag": "PORTAL",
+        "codigo_equipe_tag": "WEB",
+        "sem_responsavel": false,
+        "ativo": true,
+        "descoberto_em": 1793713765337,
+        "custo_mensal": null
+      }
+    ],
+    "equipes": [
+      {
+        "id": 13,
+        "nome": "BACKEND",
+        "codigo": "BACKEND",
+        "projeto_id": 5,
+        "auto_gerada": true
+      },
+      {
+        "id": 12,
+        "nome": "WEB",
+        "codigo": "WEB",
+        "projeto_id": 5,
+        "auto_gerada": true
+      }
+    ]
+  }
+}

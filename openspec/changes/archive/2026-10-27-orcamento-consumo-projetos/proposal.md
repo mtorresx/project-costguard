@@ -1,6 +1,6 @@
 ## Por quê
 
-A página `/projetos` mostra apenas o orçamento mensal de cada projeto. Para saber quanto do orçamento já foi consumido no mês, o usuário precisa abrir o detalhamento de cada projeto. O frontend de referência (`C:\frontend-costguard`, branch `development-fernando-alertas`) já tem esse indicador no card da listagem (custo do mês, percentual e barra), mas depende de campos que o backend não fornece.
+A página `/projetos` mostra apenas o orçamento mensal de cada projeto. Para saber quanto do orçamento já foi consumido no mês, o usuário precisa abrir o detalhamento de cada projeto. O frontend de referência (na branch de desenvolvimento) já tem esse indicador no card da listagem (custo do mês, percentual e barra), mas depende de campos que o backend não fornece.
 
 Esta change traz o consumo MTD real para os cards de `/projetos`, preservando o visual da referência, a partir de um endpoint agregado no backend. O valor mostrado no card deve ser o mesmo da tela de detalhamento para a mesma janela.
 

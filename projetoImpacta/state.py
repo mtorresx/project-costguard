@@ -1,6 +1,6 @@
 """Estado de autenticação do CostGuard (frontend Reflex).
 
-Responsabilidades do frontend (ver design D2–D8):
+Responsabilidades do frontend:
 - manter a sessão autenticada (token, username, role) em rx.SessionStorage,
   de modo que o reload mantenha a sessão e o fechamento do navegador a descarte;
 - enviar credenciais ao backend Xano e armazenar o token em caso de sucesso;
@@ -16,9 +16,10 @@ nem registrado em log pelo frontend.
 
 from __future__ import annotations
 
-import httpx
 import reflex as rx
 
+from .api import cliente_xano
+from .components.splash import SplashState
 from .config import get_xano_base_url
 
 # Mensagem genérica de falha de autenticação — não revela se a conta existe.
@@ -29,8 +30,7 @@ class AuthState(rx.State):
     """Sessão autenticada mantida no cliente.
 
     `token`, `username` e `role` usam rx.SessionStorage: sobrevivem ao reload da
-    página e são limpos quando a aba/navegador é fechado (comportamento de sessão
-    aprovado em D3).
+    página e são limpos quando a aba/navegador é fechado (comportamento de sessão).
     """
 
     # Dados de sessão persistidos no sessionStorage do navegador.
@@ -41,6 +41,8 @@ class AuthState(rx.State):
     # Estado transitório da tela de login (não persistido).
     login_error: str = ""
     is_loading: bool = False
+    # True quando o /me não pôde ser avaliado por limite de requisições (429).
+    validacao_pendente: bool = False
 
     @rx.var
     def is_authenticated(self) -> bool:
@@ -82,7 +84,7 @@ class AuthState(rx.State):
             return
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 resp = await client.post(
                     f"{get_xano_base_url()}/login",
                     json={"username": username, "password": password},
@@ -122,7 +124,7 @@ class AuthState(rx.State):
             return AuthState.handle_unauthenticated
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 resp = await client.get(
                     f"{get_xano_base_url()}/me",
                     headers={"Authorization": f"Bearer {self.token}"},
@@ -145,7 +147,8 @@ class AuthState(rx.State):
 
         self.username = data.get("username") or ""
         self.role = data.get("role") or ""
-        return rx.redirect("/")
+        # Animação de entrada; a rota troca para o painel por baixo dela.
+        return SplashState.mostrar_pos_login("/inicio")
 
     @rx.event
     def handle_unauthenticated(self):
@@ -167,18 +170,30 @@ class AuthState(rx.State):
             return AuthState.handle_unauthenticated
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with cliente_xano(30) as client:
                 resp = await client.get(
                     f"{get_xano_base_url()}/me",
                     headers={"Authorization": f"Bearer {self.token}"},
                 )
         except Exception:
-            # Sem conseguir validar, trata como não autenticado.
+            # Falha de rede/timeout: o token não foi avaliado. A sessão é
+            # mantida e o shell avisa; cada chamada de dados continua
+            # validando o token no backend.
+            self.validacao_pendente = True
+            return
+
+        if resp.status_code in (401, 403):
+            # Token adulterado, expirado ou usuário sem acesso: limpa.
+            self.validacao_pendente = False
             return AuthState.handle_unauthenticated
 
         if resp.status_code != 200:
-            # 401 (token adulterado/expirado) ou qualquer outra falha: limpa.
-            return AuthState.handle_unauthenticated
+            # 429 (limite de requisições do plano Xano) ou 5xx: o backend não
+            # avaliou o token. Sessão mantida, com o mesmo aviso.
+            self.validacao_pendente = True
+            return
+
+        self.validacao_pendente = False
 
         try:
             data = resp.json()

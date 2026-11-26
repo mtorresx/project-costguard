@@ -14,9 +14,6 @@ query provedores verb=POST {
     text tag_alocacao_projeto? filters=trim
     // AWS Tag Key de equipe (ex.: "EQP"). Opcional, não é segredo.
     text tag_alocacao_equipe? filters=trim
-    // Característica opcional: usar o AWS Mock Simulator em vez da AWS real.
-    // Opcional; default false. Não é segredo.
-    bool usar_mock?
   }
 
   stack {
@@ -31,7 +28,7 @@ query provedores verb=POST {
       error = "Token inválido ou expirado"
     }
 
-    precondition ($usuario_logado.role == "admin") {
+    precondition ($usuario_logado.status == "ativo" && $usuario_logado.role == "admin") {
       error_type = "accessdenied"
       error = "Acesso negado"
     }
@@ -78,9 +75,8 @@ query provedores verb=POST {
         tipo_credencial    : "aws_access_key"
         aws_access_key_id  : $input.aws_access_key_id
         aws_secret_cifrado : $segredo_cifrado
-        tag_alocacao_projeto: ($input.tag_alocacao_projeto != null && $input.tag_alocacao_projeto != "") ? $input.tag_alocacao_projeto : null
+        tag_alocacao_projeto: ($input.tag_alocacao_projeto != null && $input.tag_alocacao_projeto != "") ? $input.tag_alocacao_projeto : "PRJ"
         tag_alocacao_equipe: ($input.tag_alocacao_equipe != null && $input.tag_alocacao_equipe != "") ? $input.tag_alocacao_equipe : "EQP"
-        usar_mock          : ($input.usar_mock != null) ? $input.usar_mock : false
         status             : "pendente"
       }
     } as $novo_provedor
@@ -95,7 +91,6 @@ query provedores verb=POST {
         tipo_credencial    : $novo_provedor.tipo_credencial
         tag_alocacao_projeto: $novo_provedor.tag_alocacao_projeto
         tag_alocacao_equipe: $novo_provedor.tag_alocacao_equipe
-        usar_mock          : $novo_provedor.usar_mock
         status             : $novo_provedor.status
       }
     }

@@ -51,14 +51,14 @@ existentes. Alternativa descartada: novo `tipo = mock` — quebraria as pré-con
 
 ### D2 — Base URL do Mock em variável de ambiente
 
-`MOCK_BASE_URL` (ex.: `https://aws-mock.costguard.com.br`) como env var do workspace Xano, lida
+`MOCK_BASE_URL` (ex.: `https://<URL-DO-SIMULADOR>`) como env var do workspace Xano, lida
 **apenas no backend** — nunca enviada ao frontend Reflex. Não hardcodar no XanoScript (o ambiente
 Mock pode mudar) e não criar `MOCK_ACCOUNT_ID` global (o Account ID vem sempre de
 `provedor.identificador_conta`).
 
 **Montagem segura da URL (normalização obrigatória):** antes de concatenar, remover eventual
-barra final de `MOCK_BASE_URL`, de modo que tanto `https://aws-mock.costguard.com.br` quanto
-`https://aws-mock.costguard.com.br/` (erro de config) produzam a mesma URL correta, sem barra
+barra final de `MOCK_BASE_URL`, de modo que tanto `https://<URL-DO-SIMULADOR>` quanto
+`https://<URL-DO-SIMULADOR>/` (erro de config) produzam a mesma URL correta, sem barra
 dupla. Esquema conceitual:
 
 ```
@@ -66,8 +66,8 @@ base_normalizada = MOCK_BASE_URL sem barra final      // rstrip "/"
 url_mock          = base_normalizada ~ "/aws/" ~ identificador_conta ~ "/ce/"
 ```
 
-Resultado: sempre `https://aws-mock.costguard.com.br/aws/{conta}/ce/`, nunca
-`https://aws-mock.costguard.com.br//aws/{conta}/ce/`. O caminho `usar_mock = false` MUST NOT ler
+Resultado: sempre `https://<URL-DO-SIMULADOR>/aws/{conta}/ce/`, nunca
+`https://<URL-DO-SIMULADOR>//aws/{conta}/ce/`. O caminho `usar_mock = false` MUST NOT ler
 `MOCK_BASE_URL` nem depender dela.
 
 ### D3 — Uma única implementação SigV4, assinando coerentemente o destino efetivo
@@ -82,7 +82,7 @@ inalterado):
 
 1. `$sig_host` (vai ao header `Host` e à linha `host:` do canonical headers):
    - `usar_mock = false` → `ce.us-east-1.amazonaws.com`;
-   - `usar_mock = true`  → `aws-mock.costguard.com.br` (derivado de `MOCK_BASE_URL`).
+   - `usar_mock = true`  → `<URL-DO-SIMULADOR>` (derivado de `MOCK_BASE_URL`).
 2. `$canonical_uri` (o path usado no canonical request; hoje é implicitamente `/`):
    - `usar_mock = false` → `/`;
    - `usar_mock = true`  → `/aws/{identificador_conta}/ce/`.
@@ -91,7 +91,7 @@ inalterado):
    - `usar_mock = true`  → `{base_normalizada}/aws/{identificador_conta}/ce/` (ver D2).
 
 Assim, a assinatura enviada é **tecnicamente coerente** com o destino: no Mock, assina-se com
-`host = aws-mock.costguard.com.br` e `canonical URI = /aws/{conta}/ce/`, e a requisição vai
+`host = <URL-DO-SIMULADOR>` e `canonical URI = /aws/{conta}/ce/`, e a requisição vai
 exatamente para esse host/URI. O Mock ainda não valida a assinatura, mas ela fica correta para
 validação futura, sem redesenho. O `service`/`region` permanecem `ce`/`us-east-1` (reuso da mesma
 derivação de signing key; o Mock emula o contrato do Cost Explorer).
@@ -108,7 +108,7 @@ Em `testar_conexao_provedor_POST.xs`, ramificar por `usar_mock`:
 - `true`  → NÃO assinar/chamar STS. Fazer uma chamada ao Cost Explorer do Mock em
   `{base_normalizada}/aws/{identificador_conta}/ce/` com
   `X-Amz-Target: AWSInsightsIndexService.GetTags`, corpo com `TagKey = PRJ` e um `TimePeriod`
-  válido, **assinada com SigV4 coerente ao destino do Mock** (host `aws-mock.costguard.com.br`,
+  válido, **assinada com SigV4 coerente ao destino do Mock** (host `<URL-DO-SIMULADOR>`,
   canonical URI `/aws/{conta}/ce/`, conforme D3) — exercitando a execução da assinatura pelo
   CostGuard. O secret Mock é decifrado via JWE só em memória, como no real. Critério de sucesso:
   resposta HTTP 2xx no contrato AWS JSON do Cost Explorer (GetTags), **mesmo que a lista de Tags

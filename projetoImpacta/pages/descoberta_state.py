@@ -18,6 +18,9 @@ from typing import TypedDict
 import httpx
 import reflex as rx
 
+from ..components.mensagens import sucesso
+
+from ..api import cliente_xano
 from ..config import get_xano_app_base_url
 from ..state import AuthState
 
@@ -56,7 +59,6 @@ class DescobertaState(rx.State):
     loading_descoberta: bool = False
     loading_importacao: bool = False
     erro: str = ""
-    mensagem_sucesso: str = ""
 
     # ---- Derivados (apresentação; sem lógica visual complexa) ----
 
@@ -95,7 +97,6 @@ class DescobertaState(rx.State):
         self.descobertos = []
         self.selecionados = []
         self.erro = ""
-        self.mensagem_sucesso = ""
         self.loading_descoberta = False
         self.loading_importacao = False
         self.aberto = True
@@ -107,7 +108,6 @@ class DescobertaState(rx.State):
         self.descobertos = []
         self.selecionados = []
         self.erro = ""
-        self.mensagem_sucesso = ""
 
     # ---- Seleção ----
 
@@ -131,108 +131,119 @@ class DescobertaState(rx.State):
 
     # ---- Descoberta ----
 
-    @rx.event
+    @rx.event(background=True)
     async def descobrir(self):
-        auth = await self._auth()
-        if not auth.token:
+        """Em segundo plano (P2-3): a descoberta pode levar até 60 s sem segurar a aba."""
+        async with self:
+            token = (await self._auth()).token
+            provedor_id = self.provedor_id
+            if token and (self.loading_descoberta or provedor_id == 0):
+                return
+            if token:
+                self.loading_descoberta = True
+                self.erro = ""
+        if not token:
             yield AuthState.handle_unauthenticated
             return
-        if self.loading_descoberta or self.provedor_id == 0:
-            return
-
-        self.loading_descoberta = True
-        self.erro = ""
-        yield
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with cliente_xano(60) as client:
                 resp = await client.post(
-                    f"{get_xano_app_base_url()}/provedores/{self.provedor_id}/descobrir-projetos",
-                    headers={"Authorization": f"Bearer {auth.token}"},
+                    f"{get_xano_app_base_url()}/provedores/{provedor_id}/descobrir-projetos",
+                    headers={"Authorization": f"Bearer {token}"},
                 )
         except Exception:
-            self.loading_descoberta = False
-            self.erro = _ERRO_DESCOBRIR
+            async with self:
+                self.loading_descoberta = False
+                self.erro = _ERRO_DESCOBRIR
             return
-
-        self.loading_descoberta = False
 
         if resp.status_code == 401:
+            async with self:
+                self.loading_descoberta = False
             yield AuthState.handle_unauthenticated
             return
-        if resp.status_code != 200:
-            self.erro = _mensagem_sanitizada(resp, _ERRO_DESCOBRIR)
-            return
-
         try:
-            dados = resp.json()
+            dados = resp.json() if resp.status_code == 200 else {}
         except Exception:
             dados = {}
 
-        # Erro lógico sinalizado pelo backend (status="erro").
-        if isinstance(dados, dict) and dados.get("status") == "erro":
-            self.erro = (dados.get("mensagem") or "").strip() or _ERRO_DESCOBRIR
-            self.descobertos = []
-            self.selecionados = []
-            return
+        async with self:
+            self.loading_descoberta = False
+            if self.provedor_id != provedor_id:
+                return  # o modal foi aberto para outro provedor enquanto esta descoberta rodava
+            if resp.status_code != 200:
+                self.erro = _mensagem_sanitizada(resp, _ERRO_DESCOBRIR)
+                return
 
-        self.tag_key = (dados.get("tag_key") or "") if isinstance(dados, dict) else ""
-        lista = dados.get("descobertos") if isinstance(dados, dict) else []
-        self.descobertos = [
-            _normalizar_descoberto(d) for d in (lista or []) if isinstance(d, dict)
-        ]
-        # Mantém selecionados apenas os que continuam novos.
-        novos = self.codigos_novos
-        self.selecionados = [c for c in self.selecionados if c in novos]
+            # Erro lógico sinalizado pelo backend (status="erro").
+            if isinstance(dados, dict) and dados.get("status") == "erro":
+                self.erro = (dados.get("mensagem") or "").strip() or _ERRO_DESCOBRIR
+                self.descobertos = []
+                self.selecionados = []
+                return
+
+            self.tag_key = (dados.get("tag_key") or "") if isinstance(dados, dict) else ""
+            lista = dados.get("descobertos") if isinstance(dados, dict) else []
+            self.descobertos = [
+                _normalizar_descoberto(d) for d in (lista or []) if isinstance(d, dict)
+            ]
+            # Mantém selecionados apenas os que continuam novos.
+            novos = self.codigos_novos
+            self.selecionados = [c for c in self.selecionados if c in novos]
 
     # ---- Importação ----
 
-    @rx.event
+    @rx.event(background=True)
     async def importar(self):
-        auth = await self._auth()
-        if not auth.token:
+        """Em segundo plano (P2-3): a importação pode levar até 60 s sem segurar a aba."""
+        async with self:
+            token = (await self._auth()).token
+            provedor_id = self.provedor_id
+            codigos = list(self.selecionados)
+            if token and (self.loading_importacao or not codigos):
+                return
+            if token:
+                self.loading_importacao = True
+                self.erro = ""
+        if not token:
             yield AuthState.handle_unauthenticated
             return
-        if self.loading_importacao or self.total_selecionados == 0:
-            return
-
-        self.loading_importacao = True
-        self.erro = ""
-        self.mensagem_sucesso = ""
-        yield
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with cliente_xano(60) as client:
                 resp = await client.post(
-                    f"{get_xano_app_base_url()}/provedores/{self.provedor_id}/importar-projetos",
-                    json={"codigos": list(self.selecionados)},
-                    headers={"Authorization": f"Bearer {auth.token}"},
+                    f"{get_xano_app_base_url()}/provedores/{provedor_id}/importar-projetos",
+                    json={"codigos": codigos},
+                    headers={"Authorization": f"Bearer {token}"},
                 )
         except Exception:
-            self.loading_importacao = False
-            self.erro = _ERRO_IMPORTAR
+            async with self:
+                self.loading_importacao = False
+                self.erro = _ERRO_IMPORTAR
             return
-
-        self.loading_importacao = False
 
         if resp.status_code == 401:
+            async with self:
+                self.loading_importacao = False
             yield AuthState.handle_unauthenticated
             return
-        if resp.status_code not in (200, 201):
-            self.erro = _mensagem_sanitizada(resp, _ERRO_IMPORTAR)
-            return
-
         try:
-            dados = resp.json()
+            dados = resp.json() if resp.status_code in (200, 201) else {}
         except Exception:
             dados = {}
 
-        criados = dados.get("criados") or [] if isinstance(dados, dict) else []
-        ignorados = dados.get("ignorados") or [] if isinstance(dados, dict) else []
-        self.mensagem_sucesso = _feedback_importacao(len(criados), len(ignorados))
-
-        # Limpa a seleção e redescobre para refletir os importados como existentes.
-        self.selecionados = []
+        async with self:
+            self.loading_importacao = False
+            if resp.status_code not in (200, 201):
+                self.erro = _mensagem_sanitizada(resp, _ERRO_IMPORTAR)
+                return
+            criados = dados.get("criados") or [] if isinstance(dados, dict) else []
+            ignorados = dados.get("ignorados") or [] if isinstance(dados, dict) else []
+            mensagem = _feedback_importacao(len(criados), len(ignorados))
+            # Limpa a seleção e redescobre para refletir os importados como existentes.
+            self.selecionados = []
+        yield sucesso(mensagem)
         yield DescobertaState.descobrir
 
 

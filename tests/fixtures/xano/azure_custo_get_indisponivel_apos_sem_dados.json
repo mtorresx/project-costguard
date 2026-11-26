@@ -1,0 +1,15 @@
+{
+  "provedor": "azure",
+  "configurado": true,
+  "status": "indisponivel",
+  "nao_alocado": true,
+  "custo_mes_total": null,
+  "moeda": null,
+  "atualizado_em": 1790000000000,
+  "mes_referencia": "2026-11",
+  "erro_resumo": "O Azure não respondeu agora. Mostrando o último valor guardado, se houver.",
+  "proxima_leitura_em": 1790018060000,
+  "origem": "servidor",
+  "apelido": "Azure",
+  "tenant_final": null
+}

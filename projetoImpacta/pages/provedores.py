@@ -9,12 +9,15 @@ edição, deixá-lo vazio preserva o segredo salvo.
 import reflex as rx
 
 from .. import theme as t
+from ..components.mensagens import aviso_fechavel
 from ..components.layout import app_shell
 from ..components.pill import pill
 from ..components.tabela import th
 from ..state import AuthState
+from .azure_state import AzureState
 from .descoberta_state import DescobertaState, ProjetoDescoberto
-from .provedores_state import Provedor, ProvedoresState
+from .provedores_state import CAMPOS_AZURE, Provedor, ProvedoresState
+from .sincronizacao_state import Etapa, SincronizacaoState
 
 
 def _status_pill(status: rx.Var[str]) -> rx.Component:
@@ -30,6 +33,20 @@ def _status_pill(status: rx.Var[str]) -> rx.Component:
 
 def _acoes_admin(p: Provedor) -> rx.Component:
     return rx.hstack(
+        rx.cond(
+            p["status"] == "ok",
+            rx.button(
+                rx.icon("refresh-cw", size=14),
+                "Sincronizar agora",
+                on_click=SincronizacaoState.sincronizar(p["id"], p["apelido"]),
+                loading=SincronizacaoState.executando & (SincronizacaoState.provedor_id == p["id"]),
+                disabled=SincronizacaoState.executando,
+                variant="solid",
+                color_scheme="teal",
+                size="1",
+            ),
+            rx.fragment(),
+        ),
         rx.button(
             rx.icon("plug-zap", size=14),
             "Testar",
@@ -72,26 +89,41 @@ def _acoes_admin(p: Provedor) -> rx.Component:
             rx.fragment(),
         ),
         spacing="2",
+        # Em telas de ~1440 px os cinco botões não cabem numa linha: quebram em vez de sair cortados.
+        flex_wrap="wrap",
+        min_width="280px",
+    )
+
+
+def _sincronizacao(p: Provedor) -> rx.Component:
+    """Estado do inventário: "Sincronizado há X min" ou o erro, com a última sincronização boa."""
+    return rx.cond(
+        p["sinc_erro"] != "",
+        rx.vstack(
+            rx.hstack(
+                rx.icon("triangle-alert", size=14, color=t.ERROR),
+                rx.text(p["sinc_erro"], font_size="12px", color=t.ERROR, font_weight="600"),
+                spacing="1",
+                align="start",
+            ),
+            rx.text(p["sinc_ultima_boa"], font_size="11px", color=t.TEXT_MED),
+            spacing="1",
+            align="start",
+            max_width="360px",
+        ),
+        rx.text(p["sinc_texto"], font_size="12px", color=t.TEXT_MED),
     )
 
 
 def _linha(p: Provedor) -> rx.Component:
     return rx.table.row(
         rx.table.cell(
-            rx.hstack(
-                rx.text(p["apelido"], color=t.TEXT_HIGH),
-                rx.cond(
-                    p["usar_mock"],
-                    pill("Mock", t.TEXT_MED, "rgba(148,163,184,0.1)", "rgba(148,163,184,0.3)"),
-                    rx.fragment(),
-                ),
-                spacing="2",
-                align="center",
-            ),
+            rx.text(p["apelido"], color=t.TEXT_HIGH),
         ),
         rx.table.cell(rx.text("AWS", text_transform="uppercase"), color=t.TEXT_MED),
-        rx.table.cell(p["identificador_conta"], color=t.TEXT_MED, font_family="monospace"),
+        rx.table.cell(p["conta_mascarada"], color=t.TEXT_MED, font_family="monospace"),
         rx.table.cell(_status_pill(p["status"])),
+        rx.table.cell(_sincronizacao(p)),
         rx.table.cell(
             rx.cond(AuthState.is_admin, _acoes_admin(p), rx.fragment()),
         ),
@@ -114,84 +146,151 @@ def _campo(label: str, value, on_change, placeholder: str = "", tipo: str = "tex
     )
 
 
+def _form_aws() -> rx.Component:
+    return rx.vstack(
+        _campo("Apelido", ProvedoresState.form_apelido, ProvedoresState.set_form_apelido, "Ex.: AWS Produção"),
+        _campo(
+            "Identificador da conta (AWS Account ID)",
+            ProvedoresState.form_identificador_conta,
+            ProvedoresState.set_form_identificador_conta,
+            "123456789012",
+        ),
+        _campo(
+            "Tag Key de projeto",
+            ProvedoresState.form_tag_projeto,
+            ProvedoresState.set_form_tag_projeto,
+            "PRJ",
+        ),
+        _campo(
+            "AWS Access Key ID",
+            ProvedoresState.form_access_key_id,
+            ProvedoresState.set_form_access_key_id,
+            rx.cond(
+                ProvedoresState.form_modo == "editar",
+                "Deixe em branco para manter o atual",
+                "AKIA...",
+            ),
+        ),
+        _campo(
+            "AWS Secret Access Key",
+            ProvedoresState.form_secret_access_key,
+            ProvedoresState.set_form_secret_access_key,
+            rx.cond(
+                ProvedoresState.form_modo == "editar",
+                "Deixe em branco para manter o atual",
+                "Nunca é exibido após salvo",
+            ),
+            tipo="password",
+        ),
+        rx.cond(
+            ProvedoresState.form_modo == "editar",
+            rx.text(
+                "Use uma credencial IAM dedicada, somente leitura. O segredo é "
+                "armazenado cifrado e nunca é reexibido após salvo.",
+                size="1", color=t.TEXT_MED,
+            ),
+        ),
+        rx.cond(
+            ProvedoresState.form_error != "",
+            aviso_fechavel(ProvedoresState.form_error),
+            rx.fragment(),
+        ),
+        rx.hstack(
+            rx.dialog.close(rx.button("Cancelar", variant="soft", on_click=ProvedoresState.fechar_form)),
+            rx.spacer(),
+            rx.button(
+                "Salvar",
+                on_click=ProvedoresState.salvar,
+                loading=ProvedoresState.form_loading,
+                background=t.PRIMARY,
+                color=t.ON_PRIMARY,
+                font_weight="700",
+                _hover={"background": t.PRIMARY_HOVER},
+            ),
+            width="100%",
+        ),
+        spacing="4",
+        width="100%",
+        margin_top="0.5rem",
+    )
+
+
+def _form_azure() -> rx.Component:
+    return rx.vstack(
+        rx.el.form(
+            rx.vstack(
+                rx.el.label(
+                    "Apelido",
+                    rx.input(name="apelido", placeholder="Ex.: Azure Corporativo",
+                             disabled=ProvedoresState.form_loading, width="100%"),
+                    width="100%", font_size="14px",
+                ),
+                *(
+                    rx.el.label(
+                        titulo,
+                        rx.el.input(
+                            name=campo, type="password", auto_complete="off",
+                            placeholder=("Nunca é exibido após salvo" if campo == "client_secret"
+                                         else "00000000-0000-0000-0000-000000000000"),
+                            disabled=ProvedoresState.form_loading, width="100%",
+                            display="block", padding="8px", margin_top="4px",
+                            background=t.INPUT_BG, border=f"1px solid {t.BORDER_SUBTLE}",
+                            border_radius="6px", style={"&::-ms-reveal": {"display": "none"},
+                                                       "&::placeholder": {"color": "var(--gray-a10)"}},
+                        ),
+                        width="100%", font_size="14px",
+                    )
+                    for campo, titulo in CAMPOS_AZURE
+                ),
+                rx.flex(
+                    rx.button("Cancelar", type="button", variant="soft", on_click=ProvedoresState.fechar_form),
+                    rx.button("Conectar", type="submit", loading=ProvedoresState.form_loading),
+                    justify="between", width="100%",
+                ),
+                align="start", spacing="3", width="100%",
+            ),
+            method="post", on_submit=ProvedoresState.conectar_azure, reset_on_submit=True,
+            key=ProvedoresState.versao_form_azure, auto_complete="off", width="100%",
+        ),
+        rx.cond(ProvedoresState.form_error != "", aviso_fechavel(ProvedoresState.form_error)),
+        align="start", spacing="3", width="100%",
+    )
+
+
 def _form_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
             rx.dialog.title(
-                rx.cond(ProvedoresState.form_modo == "criar", "Novo provedor AWS", "Editar provedor AWS"),
+                rx.cond(ProvedoresState.form_modo == "criar", "Novo provedor", "Editar provedor AWS"),
                 color=t.TEXT_HIGH,
             ),
             rx.vstack(
-                _campo("Apelido", ProvedoresState.form_apelido, ProvedoresState.set_form_apelido, "Ex.: AWS Produção"),
-                _campo(
-                    "Identificador da conta (AWS Account ID)",
-                    ProvedoresState.form_identificador_conta,
-                    ProvedoresState.set_form_identificador_conta,
-                    "123456789012",
-                ),
-                rx.checkbox(
-                    "Usar ambiente AWS Mock",
-                    checked=ProvedoresState.form_usar_mock,
-                    on_change=ProvedoresState.set_form_usar_mock,
-                    color_scheme="teal",
-                    size="2",
-                ),
-                _campo(
-                    "AWS Access Key ID",
-                    ProvedoresState.form_access_key_id,
-                    ProvedoresState.set_form_access_key_id,
-                    rx.cond(
-                        ProvedoresState.form_modo == "editar",
-                        "Deixe em branco para manter o atual",
-                        "AKIA...",
-                    ),
-                ),
-                _campo(
-                    "AWS Secret Access Key",
-                    ProvedoresState.form_secret_access_key,
-                    ProvedoresState.set_form_secret_access_key,
-                    rx.cond(
-                        ProvedoresState.form_modo == "editar",
-                        "Deixe em branco para manter o atual",
-                        "Nunca é exibido após salvo",
-                    ),
-                    tipo="password",
-                ),
-                rx.text(
-                    "Use uma credencial IAM dedicada, somente leitura. O segredo é "
-                    "armazenado cifrado e nunca é reexibido após salvo.",
-                    size="1",
-                    color=t.TEXT_MED,
-                ),
                 rx.cond(
-                    ProvedoresState.form_error != "",
-                    rx.callout(ProvedoresState.form_error, color_scheme="red", size="1", width="100%"),
-                    rx.fragment(),
-                ),
-                rx.hstack(
-                    rx.dialog.close(rx.button("Cancelar", variant="soft", on_click=ProvedoresState.fechar_form)),
-                    rx.spacer(),
-                    rx.button(
-                        "Salvar",
-                        on_click=ProvedoresState.salvar,
-                        loading=ProvedoresState.form_loading,
-                        background=t.PRIMARY,
-                        color=t.ON_PRIMARY,
-                        font_weight="700",
-                        _hover={"background": t.PRIMARY_HOVER},
+                    ProvedoresState.form_modo == "criar",
+                    rx.vstack(
+                        rx.el.label("Provedor", html_for="tipo-provedor"),
+                        rx.select.root(
+                            rx.select.trigger(id="tipo-provedor", width="100%"),
+                            rx.select.content(
+                                rx.select.group(rx.select.item("AWS", value="AWS"), rx.select.item("Azure", value="Azure")),
+                                position="popper", side="bottom", side_offset=4,
+                                custom_attrs={"avoidCollisions": False}, max_height="6rem",
+                            ),
+                            value=ProvedoresState.form_provedor, on_change=ProvedoresState.selecionar_provedor,
+                        ),
+                        align="start", width="100%", spacing="1",
+                        style={"&:has([aria-expanded=true])": {"padding_bottom": "calc(6rem + 4px)"}},
                     ),
-                    width="100%",
                 ),
-                spacing="4",
-                width="100%",
-                margin_top="0.5rem",
+                rx.cond(ProvedoresState.form_provedor == "Azure", _form_azure(), _form_aws()),
+                width="100%", align="stretch", spacing="3",
             ),
             background=t.SURFACE_RAISED,
             border=f"1px solid {t.BORDER_SUBTLE}",
             color=t.TEXT_MAIN,
             max_width="460px",
         ),
-        open=ProvedoresState.form_aberto,
+        open=ProvedoresState.form_aberto, on_open_change=ProvedoresState.alterar_abertura,
     )
 
 
@@ -272,6 +371,92 @@ def _descoberta_corpo() -> rx.Component:
     )
 
 
+def _icone_etapa(e: Etapa) -> rx.Component:
+    return rx.match(
+        e["estado"],
+        ("executando", rx.spinner(size="2")),
+        ("sucesso", rx.icon("circle-check", size=18, color=t.SUCCESS)),
+        ("aviso", rx.icon("triangle-alert", size=18, color=t.WARNING)),
+        ("ocupado", rx.icon("info", size=18, color=t.PRIMARY_ACCENT)),
+        ("erro", rx.icon("circle-x", size=18, color=t.ERROR)),
+        rx.icon("circle-dashed", size=18, color=t.TEXT_LOW),
+    )
+
+
+def _linha_etapa(e: Etapa) -> rx.Component:
+    return rx.hstack(
+        rx.box(_icone_etapa(e), padding_top="2px", flex_shrink="0"),
+        rx.vstack(
+            rx.text(e["nome"], size="2", weight="bold", color=t.TEXT_HIGH),
+            rx.cond(
+                e["mensagem"] != "",
+                rx.text(
+                    e["mensagem"],
+                    size="1",
+                    color=rx.match(e["estado"], ("erro", t.ERROR), ("aviso", t.WARNING), t.TEXT_MED),
+                ),
+                rx.fragment(),
+            ),
+            spacing="1",
+            align="start",
+        ),
+        spacing="3",
+        align="start",
+        width="100%",
+        padding="12px",
+        border_radius="10px",
+        background=t.SURFACE,
+        border=f"1px solid {t.BORDER_SUBTLE}",
+    )
+
+
+def _sincronizacao_modal() -> rx.Component:
+    return rx.dialog.root(
+        rx.dialog.content(
+            rx.dialog.title(
+                rx.hstack(
+                    rx.icon("refresh-cw", size=18, color=t.PRIMARY_ACCENT),
+                    rx.text("Sincronizar ", SincronizacaoState.provedor_nome),
+                    spacing="2",
+                    align="center",
+                ),
+                color=t.TEXT_HIGH,
+            ),
+            rx.dialog.description(
+                "Importa o inventário e os custos por equipe do provedor e avalia os alertas.",
+                size="2",
+                color=t.TEXT_MED,
+            ),
+            rx.vstack(
+                rx.foreach(SincronizacaoState.etapas, _linha_etapa),
+                rx.cond(
+                    ~SincronizacaoState.executando & SincronizacaoState.concluida_com_falha,
+                    aviso_fechavel("Uma ou mais etapas falharam. A falha fica registrada e aparece em Alertas."),
+                    rx.fragment(),
+                ),
+                rx.hstack(
+                    rx.spacer(),
+                    rx.button(
+                        rx.cond(SincronizacaoState.executando, "Sincronizando...", "Fechar"),
+                        on_click=[SincronizacaoState.fechar, ProvedoresState.carregar(False)],
+                        disabled=SincronizacaoState.executando,
+                        variant="soft",
+                    ),
+                    width="100%",
+                ),
+                spacing="3",
+                width="100%",
+                margin_top="0.75rem",
+            ),
+            background=t.SURFACE_RAISED,
+            border=f"1px solid {t.BORDER_SUBTLE}",
+            color=t.TEXT_MAIN,
+            max_width="480px",
+        ),
+        open=SincronizacaoState.aberto,
+    )
+
+
 def _descoberta_modal() -> rx.Component:
     return rx.dialog.root(
         rx.dialog.content(
@@ -290,13 +475,8 @@ def _descoberta_modal() -> rx.Component:
                     color=t.TEXT_MED,
                 ),
                 rx.cond(
-                    DescobertaState.mensagem_sucesso != "",
-                    rx.callout(DescobertaState.mensagem_sucesso, color_scheme="green", size="1", width="100%"),
-                    rx.fragment(),
-                ),
-                rx.cond(
                     DescobertaState.erro != "",
-                    rx.callout(DescobertaState.erro, color_scheme="red", size="1", width="100%"),
+                    aviso_fechavel(DescobertaState.erro),
                     rx.fragment(),
                 ),
                 _descoberta_corpo(),
@@ -335,13 +515,65 @@ def _descoberta_modal() -> rx.Component:
     )
 
 
+def _desconectar_azure() -> rx.Component:
+    return rx.alert_dialog.root(
+        rx.alert_dialog.trigger(
+            rx.button("Desconectar", variant="soft", color_scheme="red", size="1",
+                      disabled=AzureState.sincronizando | AzureState.desconectando),
+        ),
+        rx.alert_dialog.content(
+            rx.alert_dialog.title("Desconectar do Azure?"),
+            rx.alert_dialog.description("As credenciais cadastradas nesta tela serão removidas."),
+            rx.flex(
+                rx.alert_dialog.cancel(rx.button("Cancelar", variant="soft")),
+                rx.alert_dialog.action(
+                    rx.button("Confirmar desconexão", on_click=AzureState.desconectar, color_scheme="red"),
+                ),
+                justify="end", gap="3", margin_top="16px",
+            ),
+        ),
+    )
+
+
+def _linha_azure() -> rx.Component:
+    return rx.table.row(
+        rx.table.cell(rx.text(AzureState.apelido, color=t.TEXT_HIGH)),
+        rx.table.cell(rx.text("Azure"), color=t.TEXT_MED),
+        rx.table.cell(AzureState.conta_mascarada, color=t.TEXT_MED, font_family="monospace"),
+        rx.table.cell(_status_pill("ok")),
+        rx.table.cell(
+            rx.vstack(
+                rx.cond(AzureState.titulo != "Conectado ao Azure", rx.text(AzureState.titulo)),
+                rx.cond(AzureState.detalhe != "", rx.text(AzureState.detalhe)),
+                rx.cond(AzureState.ultima_leitura != "", rx.text("Última leitura: ", AzureState.ultima_leitura)),
+                align="start", spacing="1", color=t.TEXT_MED, font_size="12px",
+            ),
+        ),
+        rx.table.cell(rx.cond(AuthState.is_admin, rx.vstack(
+            rx.flex(
+                rx.button(
+                    rx.icon("refresh-cw", size=14), "Sincronizar agora", on_click=AzureState.sincronizar,
+                    loading=AzureState.sincronizando,
+                    disabled=AzureState.carregando | AzureState.sincronizando | (AzureState.segundos > 0),
+                    variant="solid", color_scheme="teal", size="1",
+                ),
+                rx.cond(AzureState.origem == "tela", _desconectar_azure()),
+                gap="2", wrap="wrap",
+            ),
+            rx.cond(AzureState.segundos > 0, rx.text("Sincronizar novamente em ", AzureState.segundos, " s.", size="1")),
+            rx.cond(AzureState.aviso != "", aviso_fechavel(AzureState.aviso)),
+            align="start", spacing="1",
+        ))),
+    )
+
+
 def _conteudo() -> rx.Component:
     return rx.box(
         rx.vstack(
             rx.hstack(
                 rx.vstack(
                     rx.heading("Provedores", size="7", color=t.TEXT_HIGH),
-                    rx.text("Contas de nuvem conectadas (AWS).", color=t.TEXT_MED, size="2"),
+                    rx.text("Contas de nuvem conectadas.", color=t.TEXT_MED, size="2"),
                     spacing="1",
                     align="start",
                 ),
@@ -364,14 +596,19 @@ def _conteudo() -> rx.Component:
             ),
             rx.cond(
                 ProvedoresState.error_message != "",
-                rx.callout(ProvedoresState.error_message, color_scheme="red", size="1", width="100%"),
+                aviso_fechavel(ProvedoresState.error_message),
                 rx.fragment(),
             ),
             rx.cond(
-                ProvedoresState.loading,
+                ProvedoresState.falha_teste != "",
+                aviso_fechavel(ProvedoresState.falha_teste),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (ProvedoresState.loading | AzureState.carregando) & (ProvedoresState.provedores.length() == 0) & ~AzureState.conectado,
                 rx.center(rx.spinner(size="3"), padding_y="8"),
                 rx.cond(
-                    ProvedoresState.provedores.length() > 0,
+                    (ProvedoresState.provedores.length() > 0) | AzureState.conectado,
                     rx.box(
                         rx.table.root(
                             rx.table.header(
@@ -380,10 +617,14 @@ def _conteudo() -> rx.Component:
                                     th("Tipo"),
                                     th("Conta"),
                                     th("Status"),
+                                    th("Inventário"),
                                     th("Ações"),
                                 ),
                             ),
-                            rx.table.body(rx.foreach(ProvedoresState.provedores, _linha)),
+                            rx.table.body(
+                                rx.foreach(ProvedoresState.provedores, _linha),
+                                rx.cond(AzureState.conectado, _linha_azure()),
+                            ),
                             variant="surface",
                             width="100%",
                         ),
@@ -399,11 +640,14 @@ def _conteudo() -> rx.Component:
                     ),
                 ),
             ),
+            rx.cond(~AzureState.conectado & ~AzureState.carregando & (AzureState.erro_leitura != ""),
+                    aviso_fechavel(AzureState.erro_leitura)),
             _form_modal(),
             _descoberta_modal(),
+            _sincronizacao_modal(),
             spacing="6",
             width="100%",
-            max_width="1000px",
+            max_width="1280px",
         ),
         padding=["24px", "32px", "48px"],
         width="100%",

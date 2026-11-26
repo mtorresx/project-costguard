@@ -17,9 +17,6 @@ query "provedores/{id}" verb=PATCH {
     text tag_alocacao_projeto? filters=trim
     // AWS Tag Key de equipe (ex.: "EQP"). Opcional, não é segredo.
     text tag_alocacao_equipe? filters=trim
-    // Característica opcional: usar o AWS Mock Simulator em vez da AWS real.
-    // Opcional; quando omitido, preserva o valor atual. Não é segredo.
-    bool usar_mock?
   }
 
   stack {
@@ -33,7 +30,7 @@ query "provedores/{id}" verb=PATCH {
       error = "Token inválido ou expirado"
     }
 
-    precondition ($usuario_logado.role == "admin") {
+    precondition ($usuario_logado.status == "ativo" && $usuario_logado.role == "admin") {
       error_type = "accessdenied"
       error = "Acesso negado"
     }
@@ -66,6 +63,23 @@ query "provedores/{id}" verb=PATCH {
       }
     }
 
+    // P2-12: trocar a credencial (chave ou secret) ou a conta invalida o
+    // último teste de conexão. O provedor volta a "pendente" até um novo teste, e a
+    // sincronização (que exige "ok") não usa a credencial nova sem validação.
+    // Provedor inativo continua inativo.
+    var $credencial_mudou {
+      value = $secret_enviado
+        || ($input.aws_access_key_id != null && $input.aws_access_key_id != $provedor_alvo.aws_access_key_id)
+        || ($input.identificador_conta != null && $input.identificador_conta != $provedor_alvo.identificador_conta)
+    }
+
+    var $novo_status { value = $provedor_alvo.status }
+    conditional {
+      if ($credencial_mudou && $provedor_alvo.status != "inativo") {
+        var.update $novo_status { value = "pendente" }
+      }
+    }
+
     db.edit provedores {
       field_name = "id"
       field_value = $input.id
@@ -76,7 +90,7 @@ query "provedores/{id}" verb=PATCH {
         aws_secret_cifrado : $segredo_cifrado
         tag_alocacao_projeto: ($input.tag_alocacao_projeto != null) ? $input.tag_alocacao_projeto : $provedor_alvo.tag_alocacao_projeto
         tag_alocacao_equipe: ($input.tag_alocacao_equipe != null) ? $input.tag_alocacao_equipe : $provedor_alvo.tag_alocacao_equipe
-        usar_mock          : ($input.usar_mock != null) ? $input.usar_mock : $provedor_alvo.usar_mock
+        status             : $novo_status
       }
     } as $provedor_atualizado
 
@@ -90,7 +104,6 @@ query "provedores/{id}" verb=PATCH {
         tipo_credencial    : $provedor_atualizado.tipo_credencial
         tag_alocacao_projeto: $provedor_atualizado.tag_alocacao_projeto
         tag_alocacao_equipe: $provedor_atualizado.tag_alocacao_equipe
-        usar_mock          : $provedor_atualizado.usar_mock
         status             : $provedor_atualizado.status
       }
     }

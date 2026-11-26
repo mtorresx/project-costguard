@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "corpo": {
+    "versao": 1794608634393,
+    "agora": 1794609380470,
+    "provedores": [
+      {
+        "provedor_id": 2,
+        "apelido": "AWS-DEV",
+        "status_provedor": "ok",
+        "ultima_tentativa": 1794608812621,
+        "ultimo_sucesso": 1794608812618,
+        "ultimo_status": "sucesso",
+        "ultima_mensagem": "",
+        "ultima_origem": "automatica"
+      },
+      {
+        "provedor_id": 3,
+        "apelido": "AWS-DATA",
+        "status_provedor": "ok",
+        "ultima_tentativa": 1794608726760,
+        "ultimo_sucesso": 1794608726755,
+        "ultimo_status": "sucesso",
+        "ultima_mensagem": "",
+        "ultima_origem": "automatica"
+      },
+      {
+        "provedor_id": 4,
+        "apelido": "prdo",
+        "status_provedor": "ok",
+        "ultima_tentativa": 1794608769381,
+        "ultimo_sucesso": 1794608769378,
+        "ultimo_status": "sucesso",
+        "ultima_mensagem": "",
+        "ultima_origem": "automatica"
+      }
+    ]
+  }
+}

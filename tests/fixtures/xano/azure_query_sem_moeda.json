@@ -1,0 +1,18 @@
+{
+  "name": "00000000-0000-0000-0000-000000000000",
+  "type": "Microsoft.CostManagement/query",
+  "properties": {
+    "nextLink": null,
+    "columns": [
+      {
+        "name": "Cost",
+        "type": "Number"
+      }
+    ],
+    "rows": [
+      [
+        10.0
+      ]
+    ]
+  }
+}

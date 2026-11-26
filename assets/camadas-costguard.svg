@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <symbol id="gravura" viewBox="0 0 148 148" fill="none" stroke="currentColor">
+    <rect x="5" y="5" width="138" height="138" rx="8" stroke-opacity=".38"/>
+    <path d="M13 23v-10h10m102 0h10v10m0 102v10h-10m-102 0h-10v-10"/>
+    <path d="M52 12h44m-24 124h24" stroke-opacity=".45"/>
+  </symbol>
+  <symbol id="camadas" viewBox="0 0 500 252" fill="none">
+    <defs>
+      <linearGradient id="placa" x2=".85" y2="1" gradientUnits="objectBoundingBox">
+        <stop stop-color="currentColor" stop-opacity=".52"/>
+        <stop offset=".52" stop-color="currentColor" stop-opacity=".15"/>
+        <stop offset="1" stop-color="currentColor" stop-opacity=".35"/>
+      </linearGradient>
+      <pattern id="malha" width="16" height="16" patternUnits="userSpaceOnUse">
+        <path d="M0 16V0H16" stroke="currentColor" stroke-opacity=".2" stroke-width=".7"/>
+      </pattern>
+      <g id="lamina">
+        <rect width="148" height="148" rx="11" fill="var(--lp-surface)"/>
+        <rect width="148" height="148" rx="11" fill="currentColor" fill-opacity=".11"/>
+        <rect width="148" height="148" rx="11" fill="url(#placa)" stroke="currentColor"/>
+        <rect x="6" y="6" width="136" height="136" rx="7" stroke="currentColor" stroke-opacity=".36"/>
+        <rect x="7" y="7" width="134" height="134" rx="7" fill="url(#malha)"/>
+        <path d="M16 22v-6h6m104 0h6v6m0 104v6h-6m-104 0h-6v-6" stroke="currentColor" stroke-width="1.6"/>
+      </g>
+    </defs>
+    <g stroke="currentColor" stroke-opacity=".38" stroke-dasharray="3 5">
+      <path d="m16 152 84-40m300 0 84 40M250 12v220m-172-53 173 81 173-81"/>
+    </g>
+    <g fill="currentColor">
+      <circle cx="16" cy="152" r="2"/><circle cx="484" cy="152" r="2"/>
+    </g>
+    <g transform="matrix(1 .47 -1 .47 250 100)" opacity=".52"><use href="#lamina"/></g>
+    <g transform="matrix(1 .47 -1 .47 250 76)" opacity=".8"><use href="#lamina"/></g>
+    <g transform="matrix(1 .47 -1 .47 250 51)"><use href="#lamina"/></g>
+    <g transform="matrix(1 .47 -1 .47 250 23)">
+      <use href="#lamina"/>
+    </g>
+  </symbol>
+</svg>

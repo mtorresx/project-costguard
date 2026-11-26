@@ -1,13 +1,48 @@
-.web
-*.db
-assets/external/
-.states
+# Reflex / build
 .web/
+.states/
+reflex.lock/
+node_modules/
+package-lock.json
+uploaded_files/
+assets/external/
+
+# Python
 __pycache__/
 *.py[cod]
 .venv/
-.claude/settings.local.json
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Segredos e ambiente
 .env
 .env.*
 !.env.example
-.kiro/settings/mcp.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.ppk
+
+# Dados e artefatos
+*.db
+*.sqlite*
+*.log
+*.bak
+*.sql
+*.dump
+backups/
+exports/
+
+# Ferramentas e SO
+.claude/
+.codex/
+.kiro/
+.agents/
+.orca/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

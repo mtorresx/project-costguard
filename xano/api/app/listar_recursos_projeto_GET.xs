@@ -9,41 +9,23 @@ query "projetos/{id}/recursos" verb=GET {
   }
 
   stack {
-    // Qualquer usuário autenticado pode ler (auth garante 401 sem token).
-    db.get projetos {
+    // P2-10: usuário desativado (ou removido) perde também o acesso às leituras.
+    db.get usuarios {
       field_name = "id"
-      field_value = $input.id
-    } as $projeto
+      field_value = $auth.id
+    } as $usuario_sessao
 
-    precondition ($projeto != null) {
-      error_type = "notfound"
-      error = "Projeto não encontrado"
+    precondition ($usuario_sessao != null && $usuario_sessao.status == "ativo") {
+      error_type = "unauthorized"
+      error = "Token inválido ou expirado"
     }
 
-    db.query recursos {
-      where = $db.recursos.projeto_id == $input.id
-      sort = {atualizado_em: "desc"}
-      return = {type: "list"}
-    } as $lista
-
-    // Metadados de inventário (sem custos). equipe_id=null → "Sem responsável".
-    var $resposta {
-      value = $lista|map:{
-        id               : $$.id,
-        provedor_id      : $$.provedor_id,
-        arn              : $$.arn,
-        regiao           : $$.regiao,
-        servico          : $$.servico,
-        projeto_id       : $$.projeto_id,
-        equipe_id        : $$.equipe_id,
-        codigo_projeto_tag: $$.codigo_projeto_tag,
-        codigo_equipe_tag: $$.codigo_equipe_tag,
-        sem_responsavel  : ($$.equipe_id == null),
-        ativo            : $$.ativo
-      }
-    }
+    // Lógica em function "costguard/recursos_projeto" (mesmo contrato).
+    function.run "costguard/recursos_projeto" {
+      input = {id: $input.id}
+    } as $resultado
   }
 
-  response = $resposta
+  response = $resultado
   guid = "M-TZpHN9iUKqY-8ovjYJ9ZkcYKU"
 }

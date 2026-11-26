@@ -1,0 +1,23 @@
+{
+  "name": "00000000-0000-0000-0000-000000000000",
+  "type": "Microsoft.CostManagement/query",
+  "properties": {
+    "nextLink": "https://exemplo.invalid/proxima-pagina-ficticia",
+    "columns": [
+      {
+        "name": "Cost",
+        "type": "Number"
+      },
+      {
+        "name": "Currency",
+        "type": "String"
+      }
+    ],
+    "rows": [
+      [
+        10.0,
+        "USD"
+      ]
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "provedor": "azure",
+  "configurado": true,
+  "status": "sem_permissao",
+  "nao_alocado": true,
+  "custo_mes_total": null,
+  "moeda": null,
+  "atualizado_em": null,
+  "mes_referencia": "2026-11",
+  "erro_resumo": "O Azure recusou o acesso. Confira o papel Cost Management Reader do aplicativo na assinatura.",
+  "proxima_leitura_em": 1790000060000,
+  "origem": "cooldown",
+  "origem_credencial": "servidor"
+}

@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "corpo": {
+    "username": "usuario_exemplo",
+    "nome": "Usuário Exemplo",
+    "role": "admin"
+  }
+}
